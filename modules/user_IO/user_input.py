@@ -156,24 +156,28 @@ class UserInputModule(object):
         cai_weights = calculate_cai_weights_for_input (cds_dict, estimated_expression, exp_csv_fid)
         cai_scores = general_geomean(sequence_lst= cds_dict.values(), weights= cai_weights)
         cai_scores_dict = {gene_names[i]:cai_scores[i] for i in range(len(gene_names))}
-
-        try:
-            tai_weights = TAI(tai_from_tgcnDB(org_name)).index
-            tai_scores=general_geomean(sequence_lst= cds_dict.values(), weights= tai_weights)
-            tai_scores_dict = {gene_names[i]:tai_scores[i] for i in range(len(gene_names))}
-            tai_mean = mean(tai_scores)
-            std_tai = stdev(tai_scores)
-        except:
-            tai_weights = None
-            tai_mean = None
-            std_tai = None
-            tai_scores_dict = {}
+        #
+        # try:
+        #     tai_weights = TAI(tai_from_tgcnDB(org_name)).index
+        #     tai_scores=general_geomean(sequence_lst= cds_dict.values(), weights= tai_weights)
+        #     tai_scores_dict = {gene_names[i]:tai_scores[i] for i in range(len(gene_names))}
+        #     tai_mean = mean(tai_scores)
+        #     std_tai = stdev(tai_scores)
+        # except:
+        #     tai_weights = None
+        #     tai_mean = None
+        #     std_tai = None
+        #     tai_scores_dict = {}
+        tai_weights = None
+        tai_mean = None
+        std_tai = None
+        tai_scores_dict = {}
 
         if len(estimated_expression):
             highly_exp_promoters = \
-                extract_highly_expressed_promoters(estimated_expression, prom200_dict, percent_used =1/3)
+                extract_highly_expressed_promoters(estimated_expression, prom200_dict, percent_used=1/3)
         else:
-            highly_exp_promoters =  extract_highly_expressed_promoters(cai_scores_dict, prom200_dict, percent_used=1/3)
+            highly_exp_promoters = extract_highly_expressed_promoters(cai_scores_dict, prom200_dict, percent_used=1/3)
 
 
         org_dict = {

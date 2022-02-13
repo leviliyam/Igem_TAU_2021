@@ -21,10 +21,10 @@ ENV PATH /root/meme/bin:/root/meme/libexec/meme-5.4.1:$PATH
 # Install communique
 COPY GUI ./GUI
 COPY modules ./modules
-COPY promoters_not_for_user ./promoters_not_for_user
-COPY static ./static
-COPY templates ./templates
-COPY flaskgui.py .
+# COPY promoters_not_for_user ./promoters_not_for_user
+# COPY static ./static
+# COPY templates ./templates
+# COPY flaskgui.py .
 COPY main.py .
 
 ENV PYTHONPATH /igem_tau_2021

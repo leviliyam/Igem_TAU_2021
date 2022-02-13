@@ -75,22 +75,27 @@ def run_streme():
     out_path = 'streme_outputs'
     real_out_path = os.path.join(start, out_path)
     create_folder(real_out_path)
-    for opt_org in glob.glob(os.path.join(opt_path, "*", "")):
+    for org in glob.glob(os.path.join(deopt_path, "*", "")):
 
         #first run: opt organism vs. intergenic
-        org_name = opt_org.split(os.sep)[-2]
-        dir_name = os.path.join(opt_path, org_name)
+        org_name = org.split(os.sep)[-2]
+        dir_name = os.path.join(deopt_path, org_name)
         name1 = '_'.join([org_name, '100', '200'])
         name2 = '_'.join([org_name, 'inter'])
-        one_streme(name1, dir_name, name2, dir_name, real_out_path)
+        # one_streme(name1, dir_name, name2, dir_name, real_out_path)
 
-        #second run: opt organism HE vs. all deopt organisms HE
+        # second run: opt organism HE vs. all deopt organisms HE
         for deopt_org in glob.glob(os.path.join(deopt_path, "*", "")):
-             de_org_name = deopt_org.split(os.sep)[-2]
-             de_dir_name = os.path.join(deopt_path, de_org_name)
-             name1 = '_'.join([org_name, '33', '200'])
-             name2 = '_'.join([de_org_name, '33', '200'])
-             one_streme(name1, dir_name, name2, de_dir_name, real_out_path)
+            de_org_name = deopt_org.split(os.sep)[-2]
+
+            if de_org_name == org_name:
+                logger.info("Skipping pair run for the same organism..")
+                continue
+
+            de_dir_name = os.path.join(deopt_path, de_org_name)
+            name1 = '_'.join([org_name, '33', '200'])
+            name2 = '_'.join([de_org_name, '33', '200'])
+            one_streme(name1, dir_name, name2, de_dir_name, real_out_path)
 
 
 """
@@ -102,19 +107,23 @@ Runs MAST for modified motif file and copies HTML output for user
 
 @return: name of MAST output directory
 """
-def run_mast(motif_path, promoter_path):
+def run_mast(motif_path, promoter_path, optional_name = None):
     motif_name = motif_path.split(os.sep)[-1].split('.')[0] #modified motif file- not in original folder anymore (get only name of file without ext or path)
+    print(F"motif file name: {motif_name}, motif file path: {motif_path}")
     promoter_name = promoter_path.split(os.sep)[-1].split('.')[0] #to get only file name without ext or path
-    out_name = '_'.join(['motif', motif_name, 'seq', promoter_name])
+    if optional_name is not None:
+        out_name = F"mast_{optional_name}"
+    else:
+        out_name = '_'.join(['motif', motif_name, 'seq', promoter_name])
     out_path = os.path.join(start, out_name)
     logger.info("mast out path: %s", out_path)
     mast(motif_path, promoter_path, output_path=out_path)
 
-    source_path = os.path.join(out_path, 'mast.html')
-    base_path = str(Path(__file__).parent.resolve())
-    artifacts_path = os.path.join(str(Path(base_path).parent.resolve()), "artifacts")
-    target_path = os.path.join(artifacts_path, 'mast_results.html')
-    shutil.copyfile(source_path, target_path)
+    # source_path = os.path.join(out_path, 'mast.html')
+    # base_path = str(Path(__file__).parent.resolve())
+    # artifacts_path = os.path.join(str(Path(base_path).parent.resolve()), "artifacts")
+    # target_path = os.path.join(artifacts_path, 'mast_results.html')
+    # shutil.copyfile(source_path, target_path)
                                 
     return out_path
 

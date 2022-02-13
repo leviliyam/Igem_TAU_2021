@@ -1,6 +1,6 @@
 MODEL_PREFERENCES:
-  RESTRICTION_ENZYMES: True
-  TRANSLATION: True
+  RESTRICTION_ENZYMES: False
+  TRANSLATION: False
   TRANSCRIPTION: True
   # Optional values:
   #   * single_codon_global

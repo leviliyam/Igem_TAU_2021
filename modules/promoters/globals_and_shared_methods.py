@@ -23,6 +23,6 @@ If this folder already exists - overwrites it.
 @param dname: name of a folder to create
 """
 def create_folder(dname):
-    if os.path.exists(dname):
-        shutil.rmtree(dname)
+    # if os.path.exists(dname):
+    #     shutil.rmtree(dname)
     Path(dname).mkdir(parents=True, exist_ok=True)

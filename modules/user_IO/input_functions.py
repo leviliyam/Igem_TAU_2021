@@ -43,6 +43,7 @@ def extract_intergenic(cds_start, cds_stop, cds_strand, prom_length, genome, len
     """
     for idx, vals in enumerate(zip(cds_start, cds_stop, cds_strand)):
         start, end, strand = vals
+        logger.info(F"{idx}: Iterate range {start}-{end} on strand {strand}")
         if strand == 1:
             genome = genome[:start - prom_length] + '-' * (end - start + prom_length) + genome[end:]
         else:  # strand ==-1
@@ -208,7 +209,7 @@ def calculate_cai_weights_for_input (cds_dict, estimated_expression, expression_
             highly_expressed_cds_seqs = [cds for description, cds in cds_dict.items() if description in highly_expressed_names]
             cai_weights = relative_adaptiveness(sequences=highly_expressed_cds_seqs)
             logger.info(f'Expression levels were found for {len(estimated_expression)}')
-    return  cai_weights
+    return cai_weights
 
 
 

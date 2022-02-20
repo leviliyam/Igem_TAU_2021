@@ -23,9 +23,9 @@ class promoterModule(object):
         logger.info('# PROMOTERS INFORMATION #')
         logger.info('##########################')
 
-        # promoter_file_path = create_files_for_meme(full_input_dict)
+        promoter_file_path = create_files_for_meme(full_input_dict)
         # logger.info("promoters file path: %s", promoter_file_path)
-        # run_streme()
+        run_streme()
 
         # Calculate mast for intergenic motifs
         # for intergenic_motif_file in find_all_inter_files():

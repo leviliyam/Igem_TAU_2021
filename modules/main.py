@@ -5,6 +5,8 @@ import time
 import traceback
 from pathlib import Path
 import typing
+import csv
+import xml.etree.ElementTree as et
 
 from modules.logger_factory import LoggerFactory
 
@@ -174,9 +176,6 @@ def create_csv_for_organism(csv_directory_name: str,
                             organism_name: str,
                             mast_file_name: str,
                             user_input):
-    import csv
-    import xml.etree.ElementTree as et
-
     base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
     csv_dir_path = os.path.join(base_directory, csv_directory_name)
     Path(csv_dir_path).mkdir(parents=True, exist_ok=True)
@@ -195,9 +194,9 @@ def create_csv_for_organism(csv_directory_name: str,
         evalues = []
         for m in root.findall(".//sequence"):
             seq_name = m.get("name")
-            if "hypothetical" in seq_name:
-                logger.info(F"skipping hypothetical match {seq_name}")
-                continue
+            # if "hypothetical" in seq_name:
+            #     logger.info(F"skipping hypothetical match {seq_name}")
+            #     continue
             promoter_score = m.find("score")
             promoter_evalue = promoter_score.get("evalue")
             matching_genes = [k for k in organism_info['cai_scores'].keys() if k.startswith(seq_name)]
@@ -206,17 +205,6 @@ def create_csv_for_organism(csv_directory_name: str,
                 exit(1)
             matching_gene = matching_genes[0]
             cai_score = organism_info["cai_scores"][matching_gene]
-
-            # Filter only results of highly expressed genes
-            percent_used = 1/3
-            expression_list = list(organism_info["cai_scores"].values())
-            expression_list.sort(reverse=True)
-            expression_threshold = expression_list[round(len(expression_list) * percent_used)]
-
-            # if cai_score < expression_threshold:
-            #     logger.info(F"Skipping gene {matching_gene} because its cai score {cai_score} is lower than threshold "
-            #                 F"{expression_threshold}")
-            #     continue
 
             data = [matching_gene, cai_score, promoter_evalue]
             csv_writer.writerow(data)
@@ -250,63 +238,128 @@ def create_csv_for_organism_intergenic(organism_name: str, user_input):
                                    mast_file_name=mast_file_name,
                                    user_input=user_input)
 
+
+def extract_intergenic_region_evalues(organism_name: str):
+    base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
+    mast_file_name = F"mast_inter_{organism_name}\\mast.xml".replace(" ", "_")
+    base_file = os.path.join(base_directory, mast_file_name)
+    tree = et.parse(base_file)
+    root = tree.getroot()
+
+    evalues = []
+    for m in root.findall(".//sequence"):
+        seq_name = m.get("name")
+        # if "hypothetical" in seq_name:
+        #     logger.info(F"skipping hypothetical match {seq_name}")
+        #     continue
+        promoter_score = m.find("score")
+        promoter_evalue = promoter_score.get("evalue")
+
+        evalues.append(promoter_evalue)
+
+    return evalues
+
+
 from matplotlib import pyplot
 from matplotlib.ticker import MultipleLocator
 from scipy.stats import spearmanr
 import numpy as np
 
 
-def analyze_intergenic(organism_name, cai_scores, evalues):
-    if not cai_scores:
-        logger.error(F"No cai values found for: {organism_name}")
-        return
+def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
+    # if not cai_scores:
+    #     logger.error(F"No cai values found for: {organism_name}")
+    #     return
 
     base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
     plots_directory = os.path.join(base_directory, "plots")
 
-    # 10% - 11 bad
-    # 20% - 10 bad
-    # 30% -
-    percentile = 10
+    percentile = 20
 
-    cai_scores_array = np.array(cai_scores)
-    top_threshold = np.percentile(cai_scores_array, 100-percentile)
-    bottom_threshold = np.percentile(cai_scores_array, percentile)
+    # cai_scores_array = np.array(cai_scores)
+    # top_threshold = np.percentile(cai_scores_array, 100-percentile)
+    # bottom_threshold = np.percentile(cai_scores_array, percentile)
+    #
+    # combined = [(cai_scores[i], float(evalues[i])) for i in range(len(cai_scores))]
+    # combined_coef, combined_p = spearmanr([x[0] for x in combined], [x[1] for x in combined])
+    # highly_expressed = [x for x in combined if x[0] >= top_threshold]
+    # mean_highly_expression = statistics.mean([x[0] for x in highly_expressed])
+    # mean_highly_e_value = statistics.mean([float(x[1]) for x in highly_expressed])
+    # median_highly_e_value = statistics.median([float(x[1]) for x in highly_expressed])
+    # std_highly_e_value = 0
+    # if len(highly_expressed) > 1:
+    #     std_highly_e_value = statistics.stdev([float(x[1]) for x in highly_expressed])
+    #
+    # lowly_expressed = [x for x in combined if x[0] < bottom_threshold]
+    # mean_lowly_expression = statistics.mean([x[0] for x in lowly_expressed])
+    # mean_lowly_e_value = statistics.mean([float(x[1]) for x in lowly_expressed])
+    # median_lowly_e_value = statistics.median([float(x[1]) for x in lowly_expressed])
+    # std_lowly_e_value = 0
+    # if len(lowly_expressed) > 1:
+    #     std_lowly_e_value = statistics.stdev([float(x[1]) for x in lowly_expressed])
 
-    combined = [(cai_scores[i], float(evalues[i])) for i in range(len(cai_scores))]
-    combined_coef, combined_p = spearmanr([x[0] for x in combined], [x[1] for x in combined])
-    highly_expressed = [x for x in combined if x[0] >= top_threshold]
-    mean_highly_expression = statistics.mean([x[0] for x in highly_expressed])
-    mean_highly_e_value = statistics.mean([float(x[1]) for x in highly_expressed])
-    median_highly_e_value = statistics.median([float(x[1]) for x in highly_expressed])
-    std_highly_e_value = 0
-    if len(highly_expressed) > 1:
-        std_highly_e_value = statistics.stdev([float(x[1]) for x in highly_expressed])
+    # --------------------------
+    # Calcualte e-value histogram for promoters and intergenic
+    # --------------------------
+    float_evalues = [float(x) for x in evalues]
+    if not evalues or not inter_e_values:
+        logger.info(F"missing values for {organism_name}")
+        return
+    bottom_evalues_threshold = np.percentile(float_evalues, percentile)
+    # float_evalues = [x for x in float_evalues if x < bottom_evalues_threshold]
+    mean_evalues = statistics.mean(float_evalues)
+    median_evalues = statistics.median(float_evalues)
+    float_inter_e_values = [float(x) for x in inter_e_values]
+    bottom_inter_evalues_threshold = np.percentile(float_inter_e_values, percentile)
+    # float_inter_e_values = [x for x in float_inter_e_values if x < bottom_inter_evalues_threshold]
+    mean_inter_evalues = statistics.mean(float_inter_e_values)
+    median_inter_evalues = statistics.median(float_inter_e_values)
 
-    lowly_expressed = [x for x in combined if x[0] < bottom_threshold]
-    mean_lowly_expression = statistics.mean([x[0] for x in lowly_expressed])
-    mean_lowly_e_value = statistics.mean([float(x[1]) for x in lowly_expressed])
-    median_lowly_e_value = statistics.median([float(x[1]) for x in lowly_expressed])
-    std_lowly_e_value = 0
-    if len(lowly_expressed) > 1:
-        std_lowly_e_value = statistics.stdev([float(x[1]) for x in lowly_expressed])
+    from scipy.stats import mannwhitneyu
+    w, p = mannwhitneyu(x=float_evalues, y=float_inter_e_values)
+
+    ax = pyplot.subplot(121)
+    pyplot.title(F"Promoters\n{organism_name}")
+    pyplot.xlabel("e-value")
+    pyplot.ylabel("# sequences")
+    pyplot.hist(float_evalues, bins=20, color="tab:blue", edgecolor='k')
+    pyplot.axvline(mean_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_evalues:.3f}")
+    pyplot.axvline(median_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_evalues:.3f}")
+    pyplot.legend()
+    pyplot.subplot(122, sharex=ax)
+    pyplot.title(F"Intergenic regions\n{organism_name}")
+    pyplot.xlabel("e-value")
+    pyplot.ylabel("# sequences")
+    pyplot.hist(float_inter_e_values, color="tab:red", bins=20, edgecolor='k')
+    pyplot.axvline(mean_inter_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_inter_evalues:.3f}")
+    pyplot.axvline(median_inter_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_inter_evalues:.3f}")
+    pyplot.legend()
+    pyplot.tight_layout()
+    directory = os.path.join(plots_directory, "e-value histogram")
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    logger.info(F"{organism_name} P value: {p}")
+    plot_file_name = os.path.join(directory, F"{organism_name}_p_value_{p}.png")
+    pyplot.savefig(plot_file_name)
+    pyplot.clf()
+
+    return
 
     # --------------------------
     # Calcualte cai score histogram
     # --------------------------
-    pyplot.title(F"CAI score histogram: {organism_name}")
-    fig = pyplot.figure()
-    pyplot.hist([x[0] for x in highly_expressed], label=F"highly_expressed", color="b", bins=20)
-    pyplot.hist([x[0] for x in lowly_expressed], label=F"lowly_expressed", color="r", bins=20)
-    pyplot.hist([x[0] for x in combined if x not in highly_expressed and x not in lowly_expressed],
-                label=F"highly_expressed", color="g", bins=20)
-    pyplot.legend()
-    pyplot.xlabel("cai score")
-    directory = os.path.join(plots_directory, "cai histogram")
-    Path(directory).mkdir(parents=True, exist_ok=True)
-    plot_file_name = os.path.join(directory, F"{organism_name}.png")
-    pyplot.savefig(plot_file_name)
-    pyplot.clf()
+    # pyplot.title(F"CAI score histogram: {organism_name}")
+    # fig = pyplot.figure()
+    # pyplot.hist([x[0] for x in highly_expressed], label=F"highly_expressed", color="b", bins=20)
+    # pyplot.hist([x[0] for x in lowly_expressed], label=F"lowly_expressed", color="r", bins=20)
+    # pyplot.hist([x[0] for x in combined if x not in highly_expressed and x not in lowly_expressed],
+    #             label=F"highly_expressed", color="g", bins=20)
+    # pyplot.legend()
+    # pyplot.xlabel("cai score")
+    # directory = os.path.join(plots_directory, "cai histogram")
+    # Path(directory).mkdir(parents=True, exist_ok=True)
+    # plot_file_name = os.path.join(directory, F"{organism_name}.png")
+    # pyplot.savefig(plot_file_name)
+    # pyplot.clf()
 
     # --------------------------
     # Mean/Median e-value for each group
@@ -404,9 +457,7 @@ def analyze_intergenic(organism_name, cai_scores, evalues):
     # Histograms
     # --------------------------
     pyplot.title(F"e-value distribution: {organism_name}")
-    # ax.xaxis.set_major_locator(MultipleLocator(15))
     ax = pyplot.subplot(311)
-    # ax.xaxis.set_major_locator(MultipleLocator(20))
     pyplot.ylabel("# promoters")
     pyplot.hist([x[1] for x in combined], label=F"all", color="b", bins=20)
     pyplot.legend()
@@ -450,31 +501,64 @@ def analyze_selective(first_organism,
                       first_evalues,
                       second_cai_scores,
                       second_evalues):
-    if not first_cai_scores or not second_cai_scores:
-        logger.error(F"No cai values found for: {first_organism} or {second_organism}")
-        return
-
     base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
     plots_directory = os.path.join(base_directory, "plots")
 
-    # percentile = 20
+    percentile = 20
 
+    # --------------------------
+    # Histogram plots
+    # --------------------------
+    if not first_evalues or not second_evalues:
+        logger.info(F"Missing e-values for first {first_organism} or second {second_organism}.")
+        return
+    float_first_evalues = [float(x) for x in first_evalues]
+    # bottom_first_evalues_threshold = np.percentile(float_first_evalues, percentile)
+    # float_first_evalues = [x for x in float_first_evalues if x < bottom_first_evalues_threshold]
+    mean_first_evalues = statistics.mean(float_first_evalues)
+    median_first_evalues = statistics.median(float_first_evalues)
+    float_second_evalues = [float(x) for x in second_evalues]
+    # bottom_second_evalues_threshold = np.percentile(float_second_evalues, percentile)
+    # float_second_evalues = [x for x in float_second_evalues if x < bottom_second_evalues_threshold]
+    mean_second_evalues = statistics.mean(float_second_evalues)
+    median_second_evalues = statistics.median(float_second_evalues)
+
+    from scipy.stats import mannwhitneyu
+    w, p = mannwhitneyu(x=float_first_evalues, y=float_second_evalues)
+
+    ax = pyplot.subplot(121)
+    pyplot.title(F"Optimized\n{first_organism}")
+    pyplot.xlabel("e-value")
+    pyplot.ylabel("# sequences")
+    pyplot.hist(float_first_evalues, bins=20, color="tab:blue", edgecolor='k')
+    pyplot.axvline(mean_first_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_first_evalues:.3f}")
+    pyplot.axvline(median_first_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_first_evalues:.3f}")
+    pyplot.legend()
+    pyplot.subplot(122, sharex=ax)
+    pyplot.title(F"De-optimized\n{second_organism}")
+    pyplot.xlabel("e-value")
+    pyplot.ylabel("# sequences")
+    pyplot.hist(float_second_evalues, color="tab:red", bins=20, edgecolor='k')
+    pyplot.axvline(mean_second_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_second_evalues:.3f}")
+    pyplot.axvline(median_second_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_second_evalues:.3f}")
+    pyplot.legend()
+    pyplot.tight_layout()
+    directory = os.path.join(plots_directory, "selective e-value histogram")
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    plot_file_name = os.path.join(directory, F"{first_organism}_{second_organism}_p_value_{p}.png")
+    pyplot.savefig(plot_file_name)
+    pyplot.clf()
+
+    return
+
+    # --------------------------
+    # Scatter plots
+    # --------------------------
     first_cai_scores_array = np.array(first_cai_scores)
-    # first_top_threshold = np.percentile(first_cai_scores_array, percentile)
-    # first_bottom_threshold = np.percentile(first_cai_scores_array, 100 - percentile)
-
     second_cai_scores_array = np.array(second_cai_scores)
-    # second_top_threshold = np.percentile(second_cai_scores_array, percentile)
-    # second_bottom_threshold = np.percentile(second_cai_scores_array, 100 - percentile)
 
     # combined_first = [(first_cai_scores[i], first_evalues[i]) for i in range(len(first_cai_scores))]
     # combined_second = [(second_cai_scores[i], second_evalues[i]) for i in range(len(second_cai_scores))]
-    # highly_expressed_first = [x for x in combined_first if x[0] >= first_top_threshold]
-    # highly_expressed_second = [x for x in combined_second if x[0] >= second_top_threshold]
-
-    # coef_first, p_first = spearmanr([x[0] for x in highly_expressed_first], [x[1] for x in highly_expressed_first])
-    # coef_second, p_second = spearmanr([x[0] for x in highly_expressed_second], [x[1] for x in highly_expressed_second])
-    # logger.info(F"Spearmans correlation coefficient: {coef_first}, {coef_second}")
 
     # fig = pyplot.figure()
     # ax = fig.add_subplot(1, 1, 1)
@@ -487,51 +571,74 @@ def analyze_selective(first_organism,
     # pyplot.xlabel("CAI score")
     # pyplot.ylabel("e-value")
     # pyplot.legend()
-    x = [1, 2]
-    pyplot.tick_params(
-        axis='x',  # changes apply to the x-axis
-        which='both',  # both major and minor ticks are affected
-        bottom=False,  # ticks along the bottom edge are off
-        top=False,  # ticks along the top edge are off
-        labelbottom=False)  # labels along the bottom edge are off
-    mean_e_value_optimized = statistics.mean([float(x) for x in first_evalues])
-    median_e_value_optimized = statistics.median([float(x) for x in first_evalues])
-    std_first_e_value = 0
-    if len(first_evalues) > 1:
-        std_first_e_value = statistics.stdev([float(x) for x in first_evalues])
-    mean_e_value_deoptimized = statistics.mean([float(x) for x in second_evalues])
-    median_e_value_deoptimized = statistics.median([float(x) for x in second_evalues])
-    std_second_e_value = 0
-    if len(second_evalues) > 1:
-        std_second_e_value = statistics.stdev([float(x) for x in second_evalues])
-    y = [mean_e_value_optimized, mean_e_value_deoptimized]
-    e = [std_first_e_value, std_second_e_value]
-    if any(a<0 for a in e):
-        print("Negative std!!!!")
-        print(e)
-        exit(1)
-    text = ["optimized", "de-\noptimized"]
-
-    pyplot.errorbar(x, y, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="mean")
-    x1 = [3, 4]
-    y1 = [median_e_value_optimized, median_e_value_deoptimized]
-    pyplot.errorbar(x1, y1, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="median")
-
-    for i in range(len(x)):
-        pyplot.annotate(text[i], (x[i], y[i]))
-        pyplot.annotate(text[i], (x1[i], y1[i]))
-    pyplot.ylabel("Mean/Median e-value")
-    pyplot.legend()
-    directory = os.path.join(plots_directory, "selective_mean_e_value")
-
-    Path(directory).mkdir(parents=True, exist_ok=True)
-    plot_file_name = os.path.join(directory, F"opt_{first_organism}_deopt_{second_organism}.png")
-    pyplot.savefig(plot_file_name)
-    pyplot.clf()
+    # x = [1, 2]
+    # pyplot.tick_params(
+    #     axis='x',  # changes apply to the x-axis
+    #     which='both',  # both major and minor ticks are affected
+    #     bottom=False,  # ticks along the bottom edge are off
+    #     top=False,  # ticks along the top edge are off
+    #     labelbottom=False)  # labels along the bottom edge are off
+    # mean_e_value_optimized = statistics.mean([float(x) for x in first_evalues])
+    # median_e_value_optimized = statistics.median([float(x) for x in first_evalues])
+    # std_first_e_value = 0
+    # if len(first_evalues) > 1:
+    #     std_first_e_value = statistics.stdev([float(x) for x in first_evalues])
+    # mean_e_value_deoptimized = statistics.mean([float(x) for x in second_evalues])
+    # median_e_value_deoptimized = statistics.median([float(x) for x in second_evalues])
+    # std_second_e_value = 0
+    # if len(second_evalues) > 1:
+    #     std_second_e_value = statistics.stdev([float(x) for x in second_evalues])
+    # y = [mean_e_value_optimized, mean_e_value_deoptimized]
+    # e = [std_first_e_value, std_second_e_value]
+    # text = ["optimized", "de-\noptimized"]
+    #
+    # pyplot.errorbar(x, y, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="mean")
+    # x1 = [3, 4]
+    # y1 = [median_e_value_optimized, median_e_value_deoptimized]
+    # pyplot.errorbar(x1, y1, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="median")
+    #
+    # for i in range(len(x)):
+    #     pyplot.annotate(text[i], (x[i], y[i]))
+    #     pyplot.annotate(text[i], (x1[i], y1[i]))
+    # pyplot.ylabel("Mean/Median e-value")
+    # pyplot.legend()
+    # directory = os.path.join(plots_directory, "selective_mean_e_value")
+    #
+    # Path(directory).mkdir(parents=True, exist_ok=True)
+    # plot_file_name = os.path.join(directory, F"opt_{first_organism}_deopt_{second_organism}.png")
+    # pyplot.savefig(plot_file_name)
+    # pyplot.clf()
 
 
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
+    # from modules.promoters.motif_filtering_after_streme import find_all_inter_files
+    # from modules.promoters.globals_and_shared_methods import deopt_path
+    # from modules.promoters.run_meme import run_mast
+    # from modules.shared_functions_and_vars import fasta_to_dict, write_fasta
+    #
+    # for intergenic_motif_file in find_all_inter_files():
+    #     organism_name = "_".join(str(Path(intergenic_motif_file).parent.name).split("_")[:2])
+    #     logger.info(organism_name)
+    #     org_promoter_dir = os.path.join(deopt_path, organism_name)
+    #     # intergenic_file_path = os.path.join(org_promoter_dir, F"{organism_name}_inter.fasta")
+    #     # raw_intergenic = fasta_to_dict(intergenic_file_path)
+    #     # new_intergenic_dict = {}
+    #     # for intergenic_key, intergenic_seq in raw_intergenic.items():
+    #     #     intergenic_seq_len = len(intergenic_seq)
+    #     #     if intergenic_seq_len <= 200:
+    #     #         new_intergenic_dict[intergenic_key] = intergenic_seq
+    #     #         continue
+    #     #     for i in range(intergenic_seq_len-200):
+    #     #         new_intergenic_dict[str(int(intergenic_key)+i)] = intergenic_seq[i:i+200]
+    #     # new_intergenic_file_path = os.path.join(org_promoter_dir, F"new_{organism_name}_inter")
+    #     # write_fasta(new_intergenic_file_path, list(new_intergenic_dict.values()), list(new_intergenic_dict.keys()))
+    #
+    #     new_intergenic_file_path = os.path.join(org_promoter_dir, F"{organism_name}_inter.fasta")
+    #     run_mast(intergenic_motif_file, new_intergenic_file_path, F"inter_orig_{organism_name}")
+    #
+    # exit(0)
+
     user_inp_raw = user_input_dict or default_user_inp_raw
 
     model_preferences = models.ModelPreferences.init_from_dictionary(
@@ -554,7 +661,8 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         # intergenic promoters
         for organism_name in input_dict["organisms"].keys():
             cai_scores, evalues = create_csv_for_organism_intergenic(organism_name, input_dict)
-            analyze_intergenic(organism_name, cai_scores, evalues)
+            inter_e_values = extract_intergenic_region_evalues(organism_name)
+            analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values)
         logger.info("Intergenic end!")
         exit(0)
 

@@ -27,8 +27,10 @@ Finds all xml STREME output files from intergenic runs
 
 @return: a list of file names
 """
-def find_all_inter_files():
-    base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "streme_outputs"))
+def find_all_inter_files(base_directory=None):
+    if base_directory is None:
+        # base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "streme_outputs"))
+        base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "intergenic_motifs"))
     all_files = base_directory.glob(os.path.join("**", "*.xml"))
     inter_files = [str(f) for f in all_files if 'inter' in str(f)]
     return inter_files

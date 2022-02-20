@@ -136,7 +136,6 @@ def extract_gene_data(genbank_path, expression_csv_fid=None):
             logger.info('4. Column with the gene expression levels is labeled "mRNA_level" ')
 
 
-
     with open(genbank_path) as input_handle:
         for record in SeqIO.parse(input_handle, "genbank"):
             for feature in record.features:

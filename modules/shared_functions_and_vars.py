@@ -61,11 +61,11 @@ synonymous_codons = {
 
 #shared functions
 def fasta_to_dict(fasta_fid):
-    fasta_dict = {record.description:str(record.seq) for record in SeqIO.parse(fasta_fid, 'fasta') }
+    fasta_dict = {record.description:str(record.seq) for record in SeqIO.parse(fasta_fid, 'fasta')}
     return fasta_dict
 
 def write_fasta(fid, list_seq, list_name):
-    ofile = open(fid + '.fasta', "w+")
+    ofile = open(fid + '.fasta', "w")
     for i in range(len(list_seq)):
         ofile.write(">" + str(list_name[i]) + "\n" + str(list_seq[i]) + "\n")
     ofile.close()

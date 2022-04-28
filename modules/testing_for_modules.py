@@ -13,7 +13,7 @@ genome_path = os.path.join(base_path, 'arabidopsis_microbiome')
 
 def generate_testing_data(n_organisms=15,
                           percent_optimized=0.5,
-                          clusters_count= 2,
+                          clusters_count=2,
                           tuning_param=0.5,
                           genome_patH=genome_path):
 

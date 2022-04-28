@@ -4,7 +4,7 @@ from logger_factory.logger_factory import LoggerFactory
 from modules import models
 from modules.ORF.optimization import optimize_sequence
 from modules.ORF.organism import Organism
-from modules.ORF.Liyam_new_optimization_function import hill_climbing_optimize_by_zscore
+from modules.ORF.Liyam_new_optimization_function import hill_climbing_optimize_by_zscore, hill_climbing_optimize_aa_bulk_by_zscore
 
 logger = LoggerFactory.get_logger()
 
@@ -37,6 +37,12 @@ class ORFModule(object):
 
         if optimization_method in (models.OptimizationMethod.hill_climbing_average,
                                    models.OptimizationMethod.hill_climbing_weakest_link):
+            hill_climbing_optimize_aa_bulk_by_zscore(seq=target_gene,
+                                                     user_input=user_input,
+                                                     cai_or_tai='cai',
+                                                     max_iter=max_iter,
+                                                     optimization_method=optimization_method)
+
             return hill_climbing_optimize_by_zscore(seq=target_gene,
                                                     user_input=user_input,
                                                     cai_or_tai='cai',

@@ -82,7 +82,7 @@ def run_streme():
         dir_name = os.path.join(deopt_path, org_name)
         name1 = '_'.join([org_name, '100', '200'])
         name2 = '_'.join([org_name, 'inter'])
-        # one_streme(name1, dir_name, name2, dir_name, real_out_path)
+        one_streme(name1, dir_name, name2, dir_name, real_out_path)
 
         # second run: opt organism HE vs. all deopt organisms HE
         for deopt_org in glob.glob(os.path.join(deopt_path, "*", "")):

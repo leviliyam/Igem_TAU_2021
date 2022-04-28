@@ -658,6 +658,8 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         with open("parsed_input.json", "r") as user_input_file:
             input_dict = json.load(user_input_file)
 
+        promoters.promoterModule.run_module(input_dict)
+
         # intergenic promoters
         for organism_name in input_dict["organisms"].keys():
             cai_scores, evalues = create_csv_for_organism_intergenic(organism_name, input_dict)

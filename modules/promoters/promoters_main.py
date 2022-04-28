@@ -28,11 +28,11 @@ class promoterModule(object):
         run_streme()
 
         # Calculate mast for intergenic motifs
-        # for intergenic_motif_file in find_all_inter_files():
-        #     organism_name = "_".join(str(Path(intergenic_motif_file).parent.name).split("_")[:2])
-        #     org_promoter_dir = os.path.join(deopt_path, organism_name)
-        #     org_promoter_file_path = os.path.join(org_promoter_dir, F"{organism_name}_100_200.fasta")
-        #     run_mast(intergenic_motif_file, org_promoter_file_path)
+        for intergenic_motif_file in find_all_inter_files():
+            organism_name = "_".join(str(Path(intergenic_motif_file).parent.name).split("_")[:2])
+            org_promoter_dir = os.path.join(deopt_path, organism_name)
+            org_promoter_file_path = os.path.join(org_promoter_dir, F"{organism_name}_100_200.fasta")
+            run_mast(intergenic_motif_file, org_promoter_file_path)
 
         # Calculate mast for selective motifs
         for index, selective_motif_file in enumerate(find_all_selective_files()):

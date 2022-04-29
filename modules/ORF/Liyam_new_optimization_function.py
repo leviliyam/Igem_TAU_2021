@@ -17,6 +17,7 @@ def change_all_codons_of_aa(seq: str, selected_codon: str):
     return ''.join(new_split_seq)
 
 import csv
+import time
 
 # in each round - check all single synonymous codon changes and calculate optimization score - take the best one
 def hill_climbing_optimize_by_zscore(seq: str,
@@ -35,7 +36,6 @@ def hill_climbing_optimize_by_zscore(seq: str,
     @max_iter: maximal number of iterations to perform
     return: seq, which is the optimized sequence
     """
-
     seq_options = {}
     score = OptimizationModule.run_module(
         final_seq=seq,
@@ -98,7 +98,7 @@ def hill_climbing_optimize_aa_bulk_by_zscore(seq: str,
     @max_iter: maximal number of iterations to perform
     return: seq, which is the optimized sequence
     """
-
+    optimization_method = models.OptimizationMethod.hill_climbing_average
     seq_options = {}
     score = OptimizationModule.run_module(
         final_seq=seq,
@@ -108,14 +108,15 @@ def hill_climbing_optimize_aa_bulk_by_zscore(seq: str,
     )
     seq_options[seq] = score
 
-    # TODO - CONTINUE FROM HERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # TODO - create a csv with row per aa and every columns is a tuple of chosen codon and score for it
-    with open('aa_change_by_iteration.csv', 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(["iteration", "score"])
+    with open("aa_score_change_by_iteration.csv", "w") as f, open("aa_change_by_iteration.csv", "w") as aa_file:
+        aa_score_writer = csv.writer(f)
+        aa_score_writer.writerow(["iteration", "score"])
 
         from modules.shared_functions_and_vars import synonymous_codons
+        import collections
 
+        iterations_summary = collections.defaultdict(list)
+        i = 0
         for run in range(max_iter):
             def find_best_aa_synonymous_codon(codons_list, seq_to_change):
                 aa_seq_options = {}
@@ -135,6 +136,7 @@ def hill_climbing_optimize_aa_bulk_by_zscore(seq: str,
             for aa in synonymous_codons.keys():
                 selected_aa_codon = find_best_aa_synonymous_codon(codons_list=synonymous_codons[aa], seq_to_change=seq)
                 aa_to_selected_codon[aa] = selected_aa_codon
+                iterations_summary[aa].append(selected_aa_codon)
 
             # create new seq by replacing all synonymous codons
             new_seq = seq
@@ -150,17 +152,23 @@ def hill_climbing_optimize_aa_bulk_by_zscore(seq: str,
             )
             seq_options[new_seq] = score
 
-            writer.writerow([run+1, seq_options[new_seq]])
+            aa_score_writer.writerow([run+1, seq_options[new_seq]])
 
             if new_seq == seq:
                 break
 
-            # TODO - do we really want to do this?
-            # if seq_options[new_seq] > seq_options[seq]:
-            #     break
             else:
                 seq = new_seq
+                i += 1
 
-        writer.writerow([seq])
+        aa_score_writer.writerow([seq])
+        aa_iterations = csv.writer(aa_file)
+        headers = ["aa"]
+        headers.extend(list(range(i)))
+        aa_iterations.writerow(headers)
+        for aa in iterations_summary:
+            row = [aa]
+            row.extend(iterations_summary[aa])
+            aa_iterations.writerow(row)
 
     return seq

@@ -64,45 +64,92 @@ def unit1(user_input: models.UserInput):
     optimization_method = user_input.optimization_method
     try:
         # both CAI and tAI, select the one with the best optimization index tai optimization
-        logger.info('tAI information:')
-        cds_nt_final_tai = ORF.ORFModule.run_module(user_input, 'tai', optimization_method)
-
-        tai_mean_opt_index, tai_mean_deopt_index, tai_optimization_index, tai_weakest_score = \
-            ZscoreModule.run_module(cds_nt_final_tai, user_input, optimization_type='tai')
-
-        logger.info(f'Sequence:\n{cds_nt_final_tai}')
-        logger.info(f'Optimized sequences score: {tai_mean_opt_index}, '
-                    f'deoptimized sequence score: {tai_mean_deopt_index}')
-        logger.info(f'Final optimization score: {tai_optimization_index}')
+        # logger.info('tAI information:')
+        # cds_nt_final_tai = ORF.ORFModule.run_module(user_input, 'tai', optimization_method)
+        #
+        # tai_mean_opt_index, tai_mean_deopt_index, tai_optimization_index, tai_weakest_score = \
+        #     ZscoreModule.run_module(cds_nt_final_tai, user_input, optimization_type='tai')
+        #
+        # logger.info(f'Sequence:\n{cds_nt_final_tai}')
+        # logger.info(f'Optimized sequences score: {tai_mean_opt_index}, '
+        #             f'deoptimized sequence score: {tai_mean_deopt_index}')
+        # logger.info(f'Final optimization score: {tai_optimization_index}')
 
         # cai optimization
         logger.info('CAI information:')
-        cds_nt_final_cai = ORF.ORFModule.run_module(user_input, 'cai', optimization_method)
 
-        cai_mean_opt_index, cai_mean_deopt_index, cai_optimization_index, cai_weakest_score = \
-            ZscoreModule.run_module(cds_nt_final_cai, user_input, optimization_type='cai')
+        with open("comparison.txt", "w") as f:
+            logger.info("Optimize by regular method:")
+            tic = time.time()
+            cds_nt_final_cai = ORF.ORFModule.run_module(user_input, 'cai', optimization_method)
+            tac = time.time()
+            time_diff = tac - tic
+            cai_mean_opt_index, cai_mean_deopt_index, cai_optimization_index, cai_weakest_score = \
+                ZscoreModule.run_module(cds_nt_final_cai, user_input, optimization_type='cai')
 
-        logger.info(f'Sequence:\n{cds_nt_final_cai}')
-        logger.info(f'Optimized sequences score: {cai_mean_opt_index}, '
-                    f'deoptimized sequence score: {cai_mean_deopt_index}')
-        logger.info(f'Final optimization score: {cai_optimization_index}')
+            logger.info(f'Sequence:\n{cds_nt_final_cai}')
+            logger.info(f'Optimized sequences score: {cai_mean_opt_index}, '
+                        f'deoptimized sequence score: {cai_mean_deopt_index}')
+            logger.info(f'Final optimization score: {cai_optimization_index}')
 
-        if cai_optimization_index > tai_optimization_index:
+            f.write(" -- Optimized -- \n")
+            for x in user_input.organisms:
+                if x.is_optimized:
+                    f.write(x.name + "\n")
+            f.write(" -- Deoptimized -- \n")
+            for x in user_input.organisms:
+                if not x.is_optimized:
+                    f.write(x.name + "\n")
+            f.write(" -- Regular -- \n")
+            f.write(F"Time: {time_diff} \n")
+            f.write(F"Final score: {cai_optimization_index} \n")
+            f.write(F"Seq: {cds_nt_final_cai} \n")
+
+            logger.info("Optimize by aa bulk:")
+            tic = time.time()
+            cds_nt_final_cai = ORF.ORFModule.run_module(user_input, 'cai', models.OptimizationMethod.hill_climbing_bulk_aa_average)
+            tac = time.time()
+            time_diff = tac - tic
+            cai_mean_opt_index, cai_mean_deopt_index, cai_optimization_index, cai_weakest_score = \
+                ZscoreModule.run_module(cds_nt_final_cai, user_input, optimization_type='cai')
+
+            logger.info(f'Sequence:\n{cds_nt_final_cai}')
+            logger.info(f'Optimized sequences score: {cai_mean_opt_index}, '
+                        f'deoptimized sequence score: {cai_mean_deopt_index}')
+            logger.info(f'Final optimization score: {cai_optimization_index}')
+
+            f.write(" -- ALL AA -- \n")
+            f.write(F"Time: {time_diff} \n")
+            f.write(F"Final score: {cai_optimization_index} \n")
+            f.write(F"Seq: {cds_nt_final_cai} \n")
+
             logger.info('CAI sequence was selected')
             final_cds = cds_nt_final_cai
             optimization_index = cai_optimization_index
             mean_opt_index = cai_mean_opt_index
             mean_deopt_index = cai_mean_deopt_index
             weakest_score = cai_weakest_score
-        else:
-            logger.info('tAI sequence was selected')
-            final_cds = cds_nt_final_tai
-            optimization_index = tai_optimization_index
-            mean_opt_index = tai_mean_opt_index
-            mean_deopt_index = tai_mean_deopt_index
-            weakest_score = tai_weakest_score
 
-    except:
+            logger.info("***************** THE END *******************************")
+            exit(0)
+        # FIXME - try to optimize only by cai for the comparison
+        # if cai_optimization_index > tai_optimization_index:
+        #     logger.info('CAI sequence was selected')
+        #     final_cds = cds_nt_final_cai
+        #     optimization_index = cai_optimization_index
+        #     mean_opt_index = cai_mean_opt_index
+        #     mean_deopt_index = cai_mean_deopt_index
+        #     weakest_score = cai_weakest_score
+        # else:
+        #     logger.info('tAI sequence was selected')
+        #     final_cds = cds_nt_final_tai
+        #     optimization_index = tai_optimization_index
+        #     mean_opt_index = tai_mean_opt_index
+        #     mean_deopt_index = tai_mean_deopt_index
+        #     weakest_score = tai_weakest_score
+
+    except Exception as e:
+        logger.error(F"An error was encountered!!!!\n {e}")
         logger.info('CAI information:')
         final_cds = ORF.ORFModule.run_module(user_input, 'cai', optimization_method=optimization_method)
         mean_opt_index, mean_deopt_index, optimization_index, weakest_score =\

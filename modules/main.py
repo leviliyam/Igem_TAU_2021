@@ -1,19 +1,20 @@
 import os
-import shutil
 import statistics
 import time
 import traceback
 from pathlib import Path
 import typing
 import csv
+import json
 import xml.etree.ElementTree as et
+
+from matplotlib import pyplot
+import numpy as np
 
 from modules.logger_factory import LoggerFactory
 
 # Create clean artifacts directory
 artifacts_directory = Path(os.path.join(str(Path(__file__).parent.resolve()), "artifacts"))
-# if artifacts_directory.exists() and artifacts_directory.is_dir():
-#     shutil.rmtree(artifacts_directory)
 artifacts_directory.mkdir(parents=True, exist_ok=True)
 
 from modules import Zscore_calculation, user_IO, RE, ORF, promoters
@@ -23,13 +24,13 @@ logger = LoggerFactory.create_logger("main")
 
 current_directory = Path(__file__).parent.resolve()
 # base_path = os.path.join(Path(current_directory).parent.resolve(), "example_data")
-# base_path = "/arabidopsis_microbiome"
-base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
+base_path = "/arabidopsis_microbiome"
+# base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
 
 default_user_inp_raw = {
     'sequence': os.path.join(base_path, 'mCherry_original.fasta'),
     'selected_promoters': None,
-    'tuning_param': 0.75,
+    'tuning_param': 0.5,
     'organisms': {
         'org1': {'genome_path': os.path.join(base_path, 'Agromyces allii.gb'),
                  'optimized': False,
@@ -215,19 +216,6 @@ def create_csv_for_organism(csv_directory_name: str,
     return cai_scores, evalues
 
 
-def create_csv_for_organism_selective(first_organism, second_organism, user_input, is_first: bool):
-    suffix = "first" if is_first else "second"
-    organism_name = first_organism if is_first else second_organism
-    csv_directory_name = "selective_csv_files"
-    csv_file_name = F"opt_{first_organism}_deopt_{second_organism}_{suffix}.csv"
-    mast_file_name = F"mast {first_organism} {second_organism} {suffix}\\mast.xml".replace(" ", "_")
-    return create_csv_for_organism(csv_directory_name=csv_directory_name,
-                                   csv_file_name=csv_file_name,
-                                   organism_name=organism_name,
-                                   mast_file_name=mast_file_name,
-                                   user_input=user_input)
-
-
 def create_csv_for_organism_intergenic(organism_name: str, user_input):
     csv_file_name = F"{organism_name}.csv"
     csv_directory_name = "intergenic_csv_files"
@@ -258,13 +246,6 @@ def extract_intergenic_region_evalues(organism_name: str):
         evalues.append(promoter_evalue)
 
     return evalues
-
-
-from matplotlib import pyplot
-from matplotlib.ticker import MultipleLocator
-from scipy.stats import spearmanr
-import numpy as np
-
 
 def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
     # if not cai_scores:
@@ -495,150 +476,8 @@ def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
     # pyplot.clf()
 
 
-def analyze_selective(first_organism,
-                      second_organism,
-                      first_cai_scores,
-                      first_evalues,
-                      second_cai_scores,
-                      second_evalues):
-    base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
-    plots_directory = os.path.join(base_directory, "plots")
-
-    percentile = 20
-
-    # --------------------------
-    # Histogram plots
-    # --------------------------
-    if not first_evalues or not second_evalues:
-        logger.info(F"Missing e-values for first {first_organism} or second {second_organism}.")
-        return
-    float_first_evalues = [float(x) for x in first_evalues]
-    # bottom_first_evalues_threshold = np.percentile(float_first_evalues, percentile)
-    # float_first_evalues = [x for x in float_first_evalues if x < bottom_first_evalues_threshold]
-    mean_first_evalues = statistics.mean(float_first_evalues)
-    median_first_evalues = statistics.median(float_first_evalues)
-    float_second_evalues = [float(x) for x in second_evalues]
-    # bottom_second_evalues_threshold = np.percentile(float_second_evalues, percentile)
-    # float_second_evalues = [x for x in float_second_evalues if x < bottom_second_evalues_threshold]
-    mean_second_evalues = statistics.mean(float_second_evalues)
-    median_second_evalues = statistics.median(float_second_evalues)
-
-    from scipy.stats import mannwhitneyu
-    w, p = mannwhitneyu(x=float_first_evalues, y=float_second_evalues)
-
-    ax = pyplot.subplot(121)
-    pyplot.title(F"Optimized\n{first_organism}")
-    pyplot.xlabel("e-value")
-    pyplot.ylabel("# sequences")
-    pyplot.hist(float_first_evalues, bins=20, color="tab:blue", edgecolor='k')
-    pyplot.axvline(mean_first_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_first_evalues:.3f}")
-    pyplot.axvline(median_first_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_first_evalues:.3f}")
-    pyplot.legend()
-    pyplot.subplot(122, sharex=ax)
-    pyplot.title(F"De-optimized\n{second_organism}")
-    pyplot.xlabel("e-value")
-    pyplot.ylabel("# sequences")
-    pyplot.hist(float_second_evalues, color="tab:red", bins=20, edgecolor='k')
-    pyplot.axvline(mean_second_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_second_evalues:.3f}")
-    pyplot.axvline(median_second_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_second_evalues:.3f}")
-    pyplot.legend()
-    pyplot.tight_layout()
-    directory = os.path.join(plots_directory, "selective e-value histogram")
-    Path(directory).mkdir(parents=True, exist_ok=True)
-    plot_file_name = os.path.join(directory, F"{first_organism}_{second_organism}_p_value_{p}.png")
-    pyplot.savefig(plot_file_name)
-    pyplot.clf()
-
-    return
-
-    # --------------------------
-    # Scatter plots
-    # --------------------------
-    first_cai_scores_array = np.array(first_cai_scores)
-    second_cai_scores_array = np.array(second_cai_scores)
-
-    # combined_first = [(first_cai_scores[i], first_evalues[i]) for i in range(len(first_cai_scores))]
-    # combined_second = [(second_cai_scores[i], second_evalues[i]) for i in range(len(second_cai_scores))]
-
-    # fig = pyplot.figure()
-    # ax = fig.add_subplot(1, 1, 1)
-    # ax.yaxis.set_major_locator(MultipleLocator(15))
-    # pyplot.title(F"Optimized: {first_organism} Deoptimized: {second_organism}")
-    # pyplot.scatter([x[0] for x in highly_expressed_first], [x[1] for x in highly_expressed_first],
-    #                label=F"optimized rs: {coef_first:.3f}, p-value: {p_first:.3f}")
-    # pyplot.scatter([x[0] for x in highly_expressed_second], [x[1] for x in highly_expressed_second],
-    #                label=F"deoptimized rs: {coef_second:.3f}, p-value: {p_second:.3f}")
-    # pyplot.xlabel("CAI score")
-    # pyplot.ylabel("e-value")
-    # pyplot.legend()
-    # x = [1, 2]
-    # pyplot.tick_params(
-    #     axis='x',  # changes apply to the x-axis
-    #     which='both',  # both major and minor ticks are affected
-    #     bottom=False,  # ticks along the bottom edge are off
-    #     top=False,  # ticks along the top edge are off
-    #     labelbottom=False)  # labels along the bottom edge are off
-    # mean_e_value_optimized = statistics.mean([float(x) for x in first_evalues])
-    # median_e_value_optimized = statistics.median([float(x) for x in first_evalues])
-    # std_first_e_value = 0
-    # if len(first_evalues) > 1:
-    #     std_first_e_value = statistics.stdev([float(x) for x in first_evalues])
-    # mean_e_value_deoptimized = statistics.mean([float(x) for x in second_evalues])
-    # median_e_value_deoptimized = statistics.median([float(x) for x in second_evalues])
-    # std_second_e_value = 0
-    # if len(second_evalues) > 1:
-    #     std_second_e_value = statistics.stdev([float(x) for x in second_evalues])
-    # y = [mean_e_value_optimized, mean_e_value_deoptimized]
-    # e = [std_first_e_value, std_second_e_value]
-    # text = ["optimized", "de-\noptimized"]
-    #
-    # pyplot.errorbar(x, y, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="mean")
-    # x1 = [3, 4]
-    # y1 = [median_e_value_optimized, median_e_value_deoptimized]
-    # pyplot.errorbar(x1, y1, e, linestyle='dashed', marker='^', ecolor="red", capsize=10, label="median")
-    #
-    # for i in range(len(x)):
-    #     pyplot.annotate(text[i], (x[i], y[i]))
-    #     pyplot.annotate(text[i], (x1[i], y1[i]))
-    # pyplot.ylabel("Mean/Median e-value")
-    # pyplot.legend()
-    # directory = os.path.join(plots_directory, "selective_mean_e_value")
-    #
-    # Path(directory).mkdir(parents=True, exist_ok=True)
-    # plot_file_name = os.path.join(directory, F"opt_{first_organism}_deopt_{second_organism}.png")
-    # pyplot.savefig(plot_file_name)
-    # pyplot.clf()
-
-
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
-    # from modules.promoters.motif_filtering_after_streme import find_all_inter_files
-    # from modules.promoters.globals_and_shared_methods import deopt_path
-    # from modules.promoters.run_meme import run_mast
-    # from modules.shared_functions_and_vars import fasta_to_dict, write_fasta
-    #
-    # for intergenic_motif_file in find_all_inter_files():
-    #     organism_name = "_".join(str(Path(intergenic_motif_file).parent.name).split("_")[:2])
-    #     logger.info(organism_name)
-    #     org_promoter_dir = os.path.join(deopt_path, organism_name)
-    #     # intergenic_file_path = os.path.join(org_promoter_dir, F"{organism_name}_inter.fasta")
-    #     # raw_intergenic = fasta_to_dict(intergenic_file_path)
-    #     # new_intergenic_dict = {}
-    #     # for intergenic_key, intergenic_seq in raw_intergenic.items():
-    #     #     intergenic_seq_len = len(intergenic_seq)
-    #     #     if intergenic_seq_len <= 200:
-    #     #         new_intergenic_dict[intergenic_key] = intergenic_seq
-    #     #         continue
-    #     #     for i in range(intergenic_seq_len-200):
-    #     #         new_intergenic_dict[str(int(intergenic_key)+i)] = intergenic_seq[i:i+200]
-    #     # new_intergenic_file_path = os.path.join(org_promoter_dir, F"new_{organism_name}_inter")
-    #     # write_fasta(new_intergenic_file_path, list(new_intergenic_dict.values()), list(new_intergenic_dict.keys()))
-    #
-    #     new_intergenic_file_path = os.path.join(org_promoter_dir, F"{organism_name}_inter.fasta")
-    #     run_mast(intergenic_motif_file, new_intergenic_file_path, F"inter_orig_{organism_name}")
-    #
-    # exit(0)
-
     user_inp_raw = user_input_dict or default_user_inp_raw
 
     model_preferences = models.ModelPreferences.init_from_dictionary(
@@ -646,19 +485,22 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
     ) if model_preferences_dict is not None else models.ModelPreferences.init_from_config()
 
     try:
-        import json
-
         # input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
 
-        # Store parsed input as json file
+        # # Store parsed input as json file
         # with open("parsed_input.json", "w") as user_input_file:
         #     json.dump(input_dict, user_input_file)
 
         # Read input from file
         with open("parsed_input.json", "r") as user_input_file:
-            input_dict = json.load(user_input_file)
+             input_dict = json.load(user_input_file)
+
+        for organism_name in input_dict["organisms"].keys():
+            input_dict["organisms"][organism_name]["optimized"] = True
 
         promoters.promoterModule.run_module(input_dict)
+
+        exit(0)
 
         # intergenic promoters
         for organism_name in input_dict["organisms"].keys():
@@ -666,32 +508,6 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
             inter_e_values = extract_intergenic_region_evalues(organism_name)
             analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values)
         logger.info("Intergenic end!")
-        exit(0)
-
-        # selective promoters
-        for organism_name in input_dict["organisms"].keys():
-            for deopt_org_name in input_dict["organisms"].keys():
-                if organism_name == deopt_org_name:
-                    logger.info(F"Skip run for organism {organism_name} and deopt organism {deopt_org_name}")
-                    continue
-
-                first_cai_scores, first_evalues = create_csv_for_organism_selective(organism_name,
-                                                                                    deopt_org_name,
-                                                                                    input_dict,
-                                                                                    is_first=True)
-
-                second_cai_scores, second_evalues = create_csv_for_organism_selective(organism_name,
-                                                                                      deopt_org_name,
-                                                                                      input_dict,
-                                                                                      is_first=False)
-                analyze_selective(first_organism=organism_name,
-                                  second_organism=deopt_org_name,
-                                  first_cai_scores=first_cai_scores,
-                                  first_evalues=first_evalues,
-                                  second_cai_scores=second_cai_scores,
-                                  second_evalues=second_evalues)
-
-        logger.info("The end!")
         exit(0)
 
         ### unit 1 ############################################

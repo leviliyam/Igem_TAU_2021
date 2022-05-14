@@ -13,14 +13,14 @@ def extract_pssm_from_xml(fname):
     for m in root.findall('.//motif'):
         full_name = m.get('id')
         n = full_name.index('-')
-        index = int(full_name[:n])
         id_num = full_name[n + 1:]
-        width = m.get('width')
         df = pd.DataFrame(index=['A', 'C', 'G', 'T'])
         for i, pos in enumerate(m.findall('pos')):
             freqs = [pos.get('A'), pos.get('C'), pos.get('G'), pos.get('T')]
             df[i + 1] = np.array(freqs, dtype=float)
-        pssms[id_num] = df
+        if full_name in pssms:
+            raise RuntimeError(F"{id_num} shows more than once as a motif")
+        pssms[full_name] = df
 
     return pssms
 

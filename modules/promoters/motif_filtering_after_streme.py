@@ -1,4 +1,6 @@
 import glob
+import typing
+from collections import defaultdict
 from modules.promoters.globals_and_shared_methods import *
 from modules.promoters.intersect_motifs_2_org_final import *
 from pathlib import Path
@@ -7,32 +9,45 @@ from pathlib import Path
 ###### Motif filtering for multi-organism model ######
 ######################################################
 
-"""
-Checks if an intergenic STREME output file is from an optimized organism
 
-@param fname: name of a STREME output file
+def is_optimized(fname, input_dict):
+    """
+    Checks if an intergenic STREME output file is from an optimized organism
 
-@return: True if the file is from an optimized organism, False otherwise
-"""
-def is_optimized(fname):
+    @param fname: name of a STREME output file
+
+    @return: True if the file is from an optimized organism, False otherwise
+    """
+    fname = str(fname)
     name = fname.split(os.sep)[-2]
     org_name = '_'.join(name.split('_')[:2])
-    if org_name in organism_dict['opt']:
+    org_name = org_name.replace("_", " ")
+    if input_dict["organisms"][org_name]["optimized"]:
         return True
     return False
     
 
-"""
-Finds all xml STREME output files from intergenic runs
-
-@return: a list of file names
-"""
 def find_all_inter_files(base_directory=None):
+    """
+    Finds all xml STREME output files from intergenic runs
+
+    @return: a list of file names
+    """
     if base_directory is None:
-        # base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "streme_outputs"))
-        base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "intergenic_motifs"))
-    all_files = base_directory.glob(os.path.join("**", "*.xml"))
-    inter_files = [str(f) for f in all_files if 'inter' in str(f)]
+        base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "streme_outputs", "promoters_motifs"))
+    inter_files = base_directory.glob(os.path.join("**", "*.xml"))
+    return inter_files
+
+
+def find_all_anti_motif_files(base_directory=None):
+    """
+    Finds all xml STREME output files from intergenic runs
+
+    @return: a list of file names
+    """
+    if base_directory is None:
+        base_directory = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), start, "streme_outputs", "intergenic_anti_motifs"))
+    inter_files = base_directory.glob(os.path.join("**", "*.xml"))
     return inter_files
 
 
@@ -47,19 +62,18 @@ def find_all_selective_files():
     return selective_files
 
 
-"""
-Creates a new xml STREME file with all intergenic motifs in all runs
+def unionize_motifs(input_dict) -> et.ElementTree:
+    """
+    Creates a new xml STREME file with all intergenic motifs for all the unwanted hosts
 
-@return: a pointer to an ElementTree object containing the data in xml format
-"""
-def unionize_motifs():
-    inter_files = [f for f in find_all_inter_files() if is_optimized(f)]
-
+    @return: a pointer to an Element object containing the data in xml format
+    """
+    inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
     base_file = inter_files[0]
     base_tree = et.parse(base_file)
     base_root = base_tree.getroot()
     base_element = base_root.find('.//motifs')
-    
+
     for xml_file in inter_files[1:]:
         tree = et.parse(xml_file)
         root = tree.getroot()
@@ -93,54 +107,78 @@ def get_motifs_to_delete(C_set, file_list, threshold: float):
     return to_delete
 
 
-"""
-Creates a final STREME file with only motifs that are both selective and intergenic in all optimized organisms
+def compare_with_motifs(candidate_pssms, intergenic_files: typing.Sequence[str], threshold: float):
+    correlated_organisms = defaultdict(int)
 
-@param base_tree: an ElementTree object containing all intergenic motifs
-@param D1: threshold for intergenic correlation calculation
-@param D2: threshold for selective correlation calculation
+    for candidate_pssm_ind, candidate_pssm in candidate_pssms.items():
+        for file in intergenic_files:
+            single_organism_pssms = extract_pssm_from_xml(file)
+            corr_df = pd.DataFrame()
+            pval_df = pd.DataFrame()
+            for pssm_ind, pssm in single_organism_pssms.items():
+                corr, pval = compare_pssms(candidate_pssm, pssm)
+                corr_df.loc[candidate_pssm_ind, pssm_ind] = corr
+                pval_df.loc[candidate_pssm_ind, pssm_ind] = pval
 
-@return: the name of the new motif file created
-"""
-def multi_filter_motifs(base_tree, D1, D2):
-    selective_files = find_all_selective_files()
-    inter_files = find_all_inter_files()
-    C_set = extract_pssm_from_xml(os.path.join(start, 'unionized_motifs.xml'))
+            max_correlation = corr_df.max(axis=1)[0]
+            if max_correlation > threshold:
+                correlated_organisms[candidate_pssm_ind] += 1
 
-    base_root = base_tree.getroot()
-    base_element = base_root.find('.//motifs')
+    return correlated_organisms
 
-    #first check: each set S_x where x in A, has at least one motif with correlation > D1 to the C_set motif
-    to_delete1 = get_motifs_to_delete(C_set, inter_files, D1)
 
-    # We want to make sure that restrictive promoters are restrictive for the whole group.
-    #second check: each set S_xy where x in A and y in B, has at least one motif with correlation > D2 to the C_set motif
-    to_delete2 = get_motifs_to_delete(C_set, selective_files, D2)
-    
-    to_delete = set.union(to_delete1, to_delete2)
-    
-    for i, motif in enumerate(base_element.findall('motif')):
-        if i in to_delete:
-            base_element.remove(motif)
+def multi_filter_motifs(tree, input_dict):
+    """
+    Creates a final STREME file with only motifs that are both selective and intergenic in all optimized organisms
+
+    @param base_tree: an ElementTree object containing all intergenic motifs
+    @param D1: threshold for intergenic correlation calculation
+    @param D2: threshold for selective correlation calculation
+
+    @return: the name of the new motif file created
+    """
+    unified_motifs = os.path.join(start, 'unionized_motifs.xml')
+    inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
+    anti_motif_files = [str(f) for f in find_all_anti_motif_files() if not is_optimized(f, input_dict)]
+    candidates_pssms = extract_pssm_from_xml(unified_motifs)
+
+    threshold1 = 0.3
+    wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, threshold1)
+    threshold2 = 0.3
+    unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, threshold2)
+
+    final_motifs_score = {}
+
+    tuning_parameter = input_dict["tuning_param"]   # FIXME
+    for pssm_ind, pssm in candidates_pssms.items():
+        final_motifs_score[pssm_ind] = wanted_organisms_score[pssm_ind] + tuning_parameter * unwanted_organisms_score[pssm_ind]
+
+    threshold3 = 0.5
+    final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if pssm_score > threshold3]
+
+    for i, motif in enumerate(tree.findall('motif')):
+        if i not in final_motif_set:
+            tree.remove(motif)
 
     fname = 'final_motif_set.xml'
     fname = os.path.join(start, fname)
-    base_tree.write(fname)
+    tree.write(fname)
     
     return fname
 
 
-"""
-Calls the xml pipeline to create final motif set for MAST
+def create_final_motif_xml(input_dict):
+    """
+    Calls the xml pipeline to create final motif set for MAST
 
-@param D1: threshold for intergenic correlation calculation
-@param D2: threshold for selective correlation calculation
+    @param D1: threshold for intergenic correlation calculation
+    @param D2: threshold for selective correlation calculation
 
-@return: the name of the new motif file created
-""" 
-def create_final_motif_xml(D1: float, D2: float):
-    tree = unionize_motifs()
-    motif_file = multi_filter_motifs(tree, D1, D2)
+    @return: the name of the new motif file created
+    """
+
+    tree = unionize_motifs(input_dict)
+    motif_file = multi_filter_motifs(tree, input_dict)
     
     return motif_file
 

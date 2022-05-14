@@ -54,14 +54,14 @@ Executes one run of STREME for a specific set of files
 @param start2: path to the directory containing the file name2
 @param out_path: (optional) directory in which to store output files from STREME
 """
-def one_streme(name1, start1, name2, start2, out_path=""):
+def one_streme(name1, start1, name2, start2, out_path="", out_dir_name=None):
     k = 3
     minw = 6
     maxw = 20
     
     path1 = os.path.join(start1, name1 + end)
     path2 = os.path.join(start2, name2 + end)
-    out_dir = '_'.join([name1, name2])
+    out_dir = out_dir_name or '_'.join([name1, name2])
     if len(out_path) > 0:
         out_dir = os.path.join(out_path, out_dir)
     streme(primary_path=path1, control_path=path2, kmer=k, output_path=out_dir, minw=minw, maxw=maxw)
@@ -75,27 +75,39 @@ def run_streme():
     out_path = 'streme_outputs'
     real_out_path = os.path.join(start, out_path)
     create_folder(real_out_path)
-    for org in glob.glob(os.path.join(deopt_path, "*", "")):
 
-        #first run: opt organism vs. intergenic
+    # First run: opt organism vs. intergenic - finding transcription-enhancing motifs
+    # TODO - should be changed to opt_path
+    for org in glob.glob(os.path.join(deopt_path, "*", "")):
         org_name = org.split(os.sep)[-2]
         dir_name = os.path.join(deopt_path, org_name)
-        name1 = '_'.join([org_name, '100', '200'])
+        name1 = '_'.join([org_name, '33', '200'])
         name2 = '_'.join([org_name, 'inter'])
-        one_streme(name1, dir_name, name2, dir_name, real_out_path)
+        out_dir_name = os.path.join("promoters_motifs", org_name)
+        one_streme(name1, dir_name, name2, dir_name, real_out_path, out_dir_name=out_dir_name)
+
+    # Second run: intergenic vs. unwanted host promoters - finding anti-motifs
+    for org in glob.glob(os.path.join(deopt_path, "*", "")):
+        # first run: opt organism vs. intergenic - find transcription motifs
+        org_name = org.split(os.sep)[-2]
+        dir_name = os.path.join(deopt_path, org_name)
+        name1 = '_'.join([org_name, 'inter'])
+        name2 = '_'.join([org_name, '33', '200'])
+        out_dir_name = os.path.join("intergenic_anti_motifs", org_name)
+        one_streme(name1, dir_name, name2, dir_name, real_out_path, out_dir_name=out_dir_name)
 
         # second run: opt organism HE vs. all deopt organisms HE
-        for deopt_org in glob.glob(os.path.join(deopt_path, "*", "")):
-            de_org_name = deopt_org.split(os.sep)[-2]
-
-            if de_org_name == org_name:
-                logger.info("Skipping pair run for the same organism..")
-                continue
-
-            de_dir_name = os.path.join(deopt_path, de_org_name)
-            name1 = '_'.join([org_name, '33', '200'])
-            name2 = '_'.join([de_org_name, '33', '200'])
-            one_streme(name1, dir_name, name2, de_dir_name, real_out_path)
+        # for deopt_org in glob.glob(os.path.join(deopt_path, "*", "")):
+        #     de_org_name = deopt_org.split(os.sep)[-2]
+        #
+        #     if de_org_name == org_name:
+        #         logger.info("Skipping pair run for the same organism..")
+        #         continue
+        #
+        #     de_dir_name = os.path.join(deopt_path, de_org_name)
+        #     name1 = '_'.join([org_name, '33', '200'])
+        #     name2 = '_'.join([de_org_name, '33', '200'])
+        #     one_streme(name1, dir_name, name2, de_dir_name, real_out_path)
 
 
 """
@@ -108,9 +120,9 @@ Runs MAST for modified motif file and copies HTML output for user
 @return: name of MAST output directory
 """
 def run_mast(motif_path, promoter_path, optional_name = None):
-    motif_name = motif_path.split(os.sep)[-1].split('.')[0] #modified motif file- not in original folder anymore (get only name of file without ext or path)
+    motif_name = motif_path.split(os.sep)[-1].split('.')[0] # modified motif file- not in original folder anymore (get only name of file without ext or path)
     print(F"motif file name: {motif_name}, motif file path: {motif_path}")
-    promoter_name = promoter_path.split(os.sep)[-1].split('.')[0] #to get only file name without ext or path
+    promoter_name = promoter_path.split(os.sep)[-1].split('.')[0] # to get only file name without ext or path
     if optional_name is not None:
         out_name = F"mast_{optional_name}"
     else:

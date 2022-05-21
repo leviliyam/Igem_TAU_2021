@@ -120,9 +120,9 @@ Runs MAST for modified motif file and copies HTML output for user
 @return: name of MAST output directory
 """
 def run_mast(motif_path, promoter_path, optional_name = None):
-    motif_name = motif_path.split(os.sep)[-1].split('.')[0] # modified motif file- not in original folder anymore (get only name of file without ext or path)
+    motif_name = motif_path.split(os.sep)[-1].split('.')[0] # modified motif file - not in original folder anymore (get only name of file without ext or path)
     print(F"motif file name: {motif_name}, motif file path: {motif_path}")
-    promoter_name = promoter_path.split(os.sep)[-1].split('.')[0] # to get only file name without ext or path
+    promoter_name = promoter_path.split(os.sep)[-1].split('.')[0]  # to get only file name without ext or path
     if optional_name is not None:
         out_name = F"mast_{optional_name}"
     else:

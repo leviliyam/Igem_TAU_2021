@@ -4,6 +4,7 @@ from collections import defaultdict
 from modules.promoters.globals_and_shared_methods import *
 from modules.promoters.intersect_motifs_2_org_final import *
 from pathlib import Path
+import numpy as np
 
 ######################################################
 ###### Motif filtering for multi-organism model ######
@@ -110,6 +111,7 @@ def get_motifs_to_delete(C_set, file_list, threshold: float):
 def compare_with_motifs(candidate_pssms, intergenic_files: typing.Sequence[str], threshold: float):
     correlated_organisms = defaultdict(int)
 
+    organisms_count = len(intergenic_files)
     for candidate_pssm_ind, candidate_pssm in candidate_pssms.items():
         for file in intergenic_files:
             single_organism_pssms = extract_pssm_from_xml(file)
@@ -123,6 +125,8 @@ def compare_with_motifs(candidate_pssms, intergenic_files: typing.Sequence[str],
             max_correlation = corr_df.max(axis=1)[0]
             if max_correlation > threshold:
                 correlated_organisms[candidate_pssm_ind] += 1
+        # Normalize count by the number of organisms
+        correlated_organisms /= organisms_count
 
     return correlated_organisms
 
@@ -142,24 +146,24 @@ def multi_filter_motifs(tree, input_dict):
     anti_motif_files = [str(f) for f in find_all_anti_motif_files() if not is_optimized(f, input_dict)]
     candidates_pssms = extract_pssm_from_xml(unified_motifs)
 
-    threshold1 = 0.3
+    threshold1 = 0.3    # TODO - test this
     wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, threshold1)
-    threshold2 = 0.3
+    threshold2 = 0.3    # TODO - test this
     unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, threshold2)
 
     final_motifs_score = {}
-
-    tuning_parameter = input_dict["tuning_param"]   # FIXME
+    tuning_parameter = input_dict["tuning_param"]
     for pssm_ind, pssm in candidates_pssms.items():
-        final_motifs_score[pssm_ind] = wanted_organisms_score[pssm_ind] + tuning_parameter * unwanted_organisms_score[pssm_ind]
+        final_motifs_score[pssm_ind] = tuning_parameter * wanted_organisms_score[pssm_ind] + (1 - tuning_parameter) * \
+                                       unwanted_organisms_score[pssm_ind]
 
-    threshold3 = 0.5
-    final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if pssm_score > threshold3]
+    percentile_threshold = np.percentile(final_motifs_score, 75)
+    final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if
+                       pssm_score > percentile_threshold]
 
     for i, motif in enumerate(tree.findall('motif')):
         if i not in final_motif_set:
             tree.remove(motif)
-
     fname = 'final_motif_set.xml'
     fname = os.path.join(start, fname)
     tree.write(fname)

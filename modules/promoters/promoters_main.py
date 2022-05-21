@@ -53,18 +53,12 @@ class promoterModule(object):
         #
         # exit(0)
 
-        tuning_param = full_input_dict['tuning_param']
-
-        # D1 = 0.05 + tuning_param*0.3   # Threshold for finding transcription speecific promoters
-        # D2 = 0.05 + (1-tuning_param)*0.3    # Threshold for finding optimized specific promoters
-
         motif_file_path = create_final_motif_xml(full_input_dict)
         logger.info("motif file path: %s", motif_file_path)
 
-        # TODO - run mast for the results and extract an e-value, also suggest an alternative modified promoter.
-        # mast_output_folder = run_mast(motif_file_path, promoter_file_path)
-        # logger.info("mast output folder: %s", mast_output_folder)
-        #
+        # TODO - Create a promoter file path for all third HE promoters of all organisms..?
+        mast_output_folder = run_mast(motif_file_path, promoter_file_path)
+        logger.info("mast output folder: %s", mast_output_folder)
         # return modify_promoter(promoter_file_path, mast_output_folder)
 
 

@@ -39,3 +39,16 @@ def create_files_for_meme(data_dict):
     fname = os.path.join(start, 'promoters')
     write_fasta(fname, list(new_p_dict.values()), list(new_p_dict.keys()))
     return fname + end
+
+
+def create_unified_promoters_file(data_dict):
+    selected_prom = {}
+    for org, org_dict in data_dict['organisms'].items():
+        if org_dict['optimized']:
+            org_third_he_prom_dict = org_dict['third_most_HE']
+            for prom_name, prom_Seq in org_third_he_prom_dict.items():
+                selected_prom[F"{prom_name}_from_organism_{org}"] = prom_Seq
+
+    fname = os.path.join(start, 'promoters')
+    write_fasta(fname, list(selected_prom.values()), list(selected_prom.keys()))
+    return fname + end

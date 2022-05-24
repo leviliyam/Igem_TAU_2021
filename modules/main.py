@@ -478,28 +478,43 @@ def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
 
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
-    user_inp_raw = user_input_dict or default_user_inp_raw
-
-    for organism_name in user_inp_raw["organisms"].keys():
-        user_inp_raw["organisms"][organism_name]["optimized"] = True
+    # user_inp_raw = user_input_dict or default_user_inp_raw
+    #
+    # for organism_name in user_inp_raw["organisms"].keys():
+    #     user_inp_raw["organisms"][organism_name]["optimized"] = True
 
     model_preferences = models.ModelPreferences.init_from_dictionary(
         model_preferences_dict
     ) if model_preferences_dict is not None else models.ModelPreferences.init_from_config()
 
     try:
-        input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
+        # input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
 
         # # Store parsed input as json file
-        with open("parsed_input.json", "w") as user_input_file:
-            json.dump(input_dict, user_input_file)
+        # with open("parsed_input.json", "w") as user_input_file:
+        #     json.dump(input_dict, user_input_file)
 
-        exit(0)
+        # exit(0)
 
         # Read input from file
-        # with open("parsed_input.json", "r") as user_input_file:
-        #      input_dict = json.load(user_input_file)
+        with open("parsed_input.json", "r") as user_input_file:
+             input_dict = json.load(user_input_file)
 
+        organisms_names = list(input_dict["organisms"].keys())
+        organisms_count = len(organisms_names)
+        wanted_count = 2
+        unwanted_count = 2
+
+        import random
+        selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
+        selected_orgs = {}
+        for i in selected_orgs_indices:
+            org = organisms_names[i]
+            selected_orgs[org] = input_dict["organisms"][org]
+            if i >= wanted_count:
+                selected_orgs[org]["optimized"] = False
+
+        input_dict["organisms"] = selected_orgs
         promoters.promoterModule.run_module(input_dict)
 
         exit(0)

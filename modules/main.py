@@ -6,6 +6,7 @@ from pathlib import Path
 import typing
 import csv
 import json
+import random
 import xml.etree.ElementTree as et
 
 from matplotlib import pyplot
@@ -24,8 +25,8 @@ logger = LoggerFactory.create_logger("main")
 
 current_directory = Path(__file__).parent.resolve()
 # base_path = os.path.join(Path(current_directory).parent.resolve(), "example_data")
-base_path = "/arabidopsis_microbiome"
-# base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
+# base_path = "/arabidopsis_microbiome"
+base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
 
 default_user_inp_raw = {
     'sequence': os.path.join(base_path, 'mCherry_original.fasta'),
@@ -479,7 +480,7 @@ def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
     # user_inp_raw = user_input_dict or default_user_inp_raw
-    #
+    # 
     # for organism_name in user_inp_raw["organisms"].keys():
     #     user_inp_raw["organisms"][organism_name]["optimized"] = True
 
@@ -489,11 +490,11 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
 
     try:
         # input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
-
+        # 
         # # Store parsed input as json file
         # with open("parsed_input.json", "w") as user_input_file:
         #     json.dump(input_dict, user_input_file)
-
+        # 
         # exit(0)
 
         # Read input from file
@@ -505,11 +506,10 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         wanted_count = 2
         unwanted_count = 2
 
-        import random
         selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
         selected_orgs = {}
-        for i in selected_orgs_indices:
-            org = organisms_names[i]
+        for i, selected_index in enumerate(selected_orgs_indices):
+            org = organisms_names[selected_index]
             selected_orgs[org] = input_dict["organisms"][org]
             if i >= wanted_count:
                 selected_orgs[org]["optimized"] = False

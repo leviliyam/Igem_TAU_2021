@@ -1,5 +1,6 @@
 import glob
 import typing
+import random
 from collections import defaultdict
 from modules.promoters.globals_and_shared_methods import *
 from modules.promoters.intersect_motifs_2_org_final import *
@@ -23,10 +24,18 @@ def is_optimized(fname, input_dict):
     name = fname.split(os.sep)[-2]
     org_name = '_'.join(name.split('_')[:2])
     org_name = org_name.replace("_", " ")
-    if input_dict["organisms"][org_name]["optimized"]:
+    if org_name in input_dict["organisms"] and input_dict["organisms"][org_name]["optimized"]:
         return True
     return False
-    
+
+
+def is_org_in_dict(fname, input_dict):
+    fname = str(fname)
+    name = fname.split(os.sep)[-2]
+    org_name = '_'.join(name.split('_')[:2])
+    org_name = org_name.replace("_", " ")
+    return org_name in input_dict["organisms"]
+
 
 def find_all_inter_files(base_directory=None):
     """
@@ -108,12 +117,43 @@ def get_motifs_to_delete(C_set, file_list, threshold: float):
     return to_delete
 
 
-def compare_with_motifs(candidate_pssms, intergenic_files: typing.Sequence[str], threshold: float):
+def generate_random_pssms_for_correlation_threshold_calculation():
+    min_width = 6
+    max_width = 20
+
+    random_pssms_count = 100
+    random_pssms = {}
+    for i in range(random_pssms_count):
+        width = random.randint(min_width, max_width)
+        df = pd.DataFrame(index=['A', 'C', 'G', 'T'])
+        for j in range(width):
+            freqs = np.random.dirichlet(np.ones(4), size=1)
+            df[j+1] = np.array(freqs[0], dtype=float)
+        random_pssms[F"{i}-random"] = df
+    return random_pssms
+
+
+def calculate_experimental_threshold_per_motif_set(motif_files: typing.Sequence[str]):
+    random_pssms = generate_random_pssms_for_correlation_threshold_calculation()
+
+    corr_df = pd.DataFrame()
+    for random_pssm_ind, random_pssm in random_pssms.items():
+        for file in motif_files:
+            pssms = extract_pssm_from_xml(file)
+            for pssm_ind, pssm in pssms.items():
+                corr, pval = compare_pssms(random_pssm, pssm)
+                corr_df.loc[random_pssm_ind, pssm_ind] = corr
+    # TODO - continue from here - try to look only at values with positive correlation?
+    # TODO - how did we handle negative correlation before?
+    return np.percentile(corr_df, 5)
+
+
+def compare_with_motifs(candidate_pssms, organisms_motifs_files: typing.Sequence[str], threshold: float):
     correlated_organisms = defaultdict(int)
 
-    organisms_count = len(intergenic_files)
+    organisms_count = len(organisms_motifs_files)
     for candidate_pssm_ind, candidate_pssm in candidate_pssms.items():
-        for file in intergenic_files:
+        for file in organisms_motifs_files:
             single_organism_pssms = extract_pssm_from_xml(file)
             corr_df = pd.DataFrame()
             pval_df = pd.DataFrame()
@@ -123,7 +163,7 @@ def compare_with_motifs(candidate_pssms, intergenic_files: typing.Sequence[str],
                 pval_df.loc[candidate_pssm_ind, pssm_ind] = pval
 
             max_correlation = corr_df.max(axis=1)[0]
-            if max_correlation > threshold:
+            if max_correlation >= threshold:
                 correlated_organisms[candidate_pssm_ind] += 1
         # Normalize count by the number of organisms
         correlated_organisms /= organisms_count
@@ -143,12 +183,13 @@ def multi_filter_motifs(tree, input_dict):
     """
     unified_motifs = os.path.join(start, 'unionized_motifs.xml')
     inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
-    anti_motif_files = [str(f) for f in find_all_anti_motif_files() if not is_optimized(f, input_dict)]
+    anti_motif_files = [str(f) for f in find_all_anti_motif_files() if is_org_in_dict(f, input_dict) and not
+                        is_optimized(f, input_dict)]
     candidates_pssms = extract_pssm_from_xml(unified_motifs)
 
-    threshold1 = 0.3    # TODO - test this
-    wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, threshold1)
-    threshold2 = 0.3    # TODO - test this
+    inter_files_thresholds = calculate_experimental_threshold_per_motif_set(inter_files)
+    wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, inter_files_thresholds)
+    threshold2 = 0.3    # TODO - Fix this
     unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, threshold2)
 
     final_motifs_score = {}
@@ -157,7 +198,8 @@ def multi_filter_motifs(tree, input_dict):
         final_motifs_score[pssm_ind] = tuning_parameter * wanted_organisms_score[pssm_ind] + (1 - tuning_parameter) * \
                                        unwanted_organisms_score[pssm_ind]
 
-    percentile_threshold = np.percentile(final_motifs_score, 75)
+    final_percentile_cutoff = 75
+    percentile_threshold = np.percentile(final_motifs_score, final_percentile_cutoff)
     final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if
                        pssm_score > percentile_threshold]
 

@@ -133,22 +133,24 @@ def generate_random_pssms_for_correlation_threshold_calculation():
     return random_pssms
 
 
-def calculate_experimental_threshold_per_motif_set(motif_files: typing.Sequence[str]):
-    random_pssms = generate_random_pssms_for_correlation_threshold_calculation()
-
-    corr_df = pd.DataFrame()
-    for random_pssm_ind, random_pssm in random_pssms.items():
-        for file in motif_files:
-            pssms = extract_pssm_from_xml(file)
+def calculate_experimental_threshold_per_motif_set(motif_files: typing.Sequence[str]) -> typing.Dict[str, float]:
+    thresholds_per_motif_file = {}
+    for file in motif_files:
+        pssms = extract_pssm_from_xml(file)
+        random_pssms = generate_random_pssms_for_correlation_threshold_calculation()
+        corr_df = pd.DataFrame()
+        for random_pssm_ind, random_pssm in random_pssms.items():
             for pssm_ind, pssm in pssms.items():
                 corr, pval = compare_pssms(random_pssm, pssm)
                 corr_df.loc[random_pssm_ind, pssm_ind] = corr
-    # TODO - continue from here - try to look only at values with positive correlation?
-    # TODO - how did we handle negative correlation before?
-    return np.percentile(corr_df, 5)
+        thresholds_per_motif_file[file] = np.percentile(corr_df, 95)
+
+    return thresholds_per_motif_file
 
 
-def compare_with_motifs(candidate_pssms, organisms_motifs_files: typing.Sequence[str], threshold: float):
+def compare_with_motifs(candidate_pssms,
+                        organisms_motifs_files: typing.Sequence[str],
+                        threshold_per_motif_sets: typing.Dict[str, float]) -> typing.Dict[str, int]:
     correlated_organisms = defaultdict(int)
 
     organisms_count = len(organisms_motifs_files)
@@ -156,17 +158,15 @@ def compare_with_motifs(candidate_pssms, organisms_motifs_files: typing.Sequence
         for file in organisms_motifs_files:
             single_organism_pssms = extract_pssm_from_xml(file)
             corr_df = pd.DataFrame()
-            pval_df = pd.DataFrame()
             for pssm_ind, pssm in single_organism_pssms.items():
                 corr, pval = compare_pssms(candidate_pssm, pssm)
                 corr_df.loc[candidate_pssm_ind, pssm_ind] = corr
-                pval_df.loc[candidate_pssm_ind, pssm_ind] = pval
 
             max_correlation = corr_df.max(axis=1)[0]
-            if max_correlation >= threshold:
+            if max_correlation >= threshold_per_motif_sets[file]:
                 correlated_organisms[candidate_pssm_ind] += 1
         # Normalize count by the number of organisms
-        correlated_organisms /= organisms_count
+        correlated_organisms[candidate_pssm_ind] /= organisms_count
 
     return correlated_organisms
 
@@ -189,8 +189,8 @@ def multi_filter_motifs(tree, input_dict):
 
     inter_files_thresholds = calculate_experimental_threshold_per_motif_set(inter_files)
     wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, inter_files_thresholds)
-    threshold2 = 0.3    # TODO - Fix this
-    unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, threshold2)
+    anti_motifs_thresholds = calculate_experimental_threshold_per_motif_set(anti_motif_files)
+    unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, anti_motifs_thresholds)
 
     final_motifs_score = {}
     tuning_parameter = input_dict["tuning_param"]
@@ -199,9 +199,9 @@ def multi_filter_motifs(tree, input_dict):
                                        unwanted_organisms_score[pssm_ind]
 
     final_percentile_cutoff = 75
-    percentile_threshold = np.percentile(final_motifs_score, final_percentile_cutoff)
+    percentile_threshold = np.percentile(list(final_motifs_score.values()), final_percentile_cutoff)
     final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if
-                       pssm_score > percentile_threshold]
+                       pssm_score >= percentile_threshold]
 
     for i, motif in enumerate(tree.findall('motif')):
         if i not in final_motif_set:

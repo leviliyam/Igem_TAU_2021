@@ -1,4 +1,6 @@
+import csv
 import glob
+import math
 import typing
 import random
 from collections import defaultdict
@@ -122,9 +124,12 @@ def generate_random_pssms_for_correlation_threshold_calculation():
     max_width = 20
 
     random_pssms_count = 100
+    # iterations = math.ceil(random_pssms_count / (max_width - min_width + 1))
     random_pssms = {}
+    # for i in range(iterations):
     for i in range(random_pssms_count):
-        width = random.randint(min_width, max_width)
+        # for width in range(min_width, max_width + 1):
+        width = random.randrange(min_width, max_width + 1)
         df = pd.DataFrame(index=['A', 'C', 'G', 'T'])
         for j in range(width):
             freqs = np.random.dirichlet(np.ones(4), size=1)
@@ -175,12 +180,15 @@ def multi_filter_motifs(tree, input_dict):
     """
     Creates a final STREME file with only motifs that are both selective and intergenic in all optimized organisms
 
-    @param base_tree: an ElementTree object containing all intergenic motifs
-    @param D1: threshold for intergenic correlation calculation
-    @param D2: threshold for selective correlation calculation
+    @param tree: an ElementTree object containing all intergenic motifs
 
     @return: the name of the new motif file created
     """
+    # TODO modifications:
+    #   2. Log experimental thresholds for every run
+    #   3. Compare e-values of optimized vs. deoptimized organisms
+    #   4. Compare e-values of optimized vs. deoptimized when looking at all promoters (not just HE)
+    #   5. Repeat for subset of populations from mgnify DB - calcualte HE genes, calculate promoters, continue with analysis
     unified_motifs = os.path.join(start, 'unionized_motifs.xml')
     inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
     anti_motif_files = [str(f) for f in find_all_anti_motif_files() if is_org_in_dict(f, input_dict) and not
@@ -191,6 +199,15 @@ def multi_filter_motifs(tree, input_dict):
     wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, inter_files_thresholds)
     anti_motifs_thresholds = calculate_experimental_threshold_per_motif_set(anti_motif_files)
     unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, anti_motifs_thresholds)
+
+    Path(os.path.join(artifacts_path, "promoters")).mkdir(parents=True, exist_ok=True)
+    with open(os.path.join(artifacts_path, "promoters", "experimental_p_value.csv"), "w") as p_value_file:
+        csv_writer = csv.writer(p_value_file)
+        csv_writer.writerow(["organism_motifs_file", "p_value"])
+        for key, value in inter_files_thresholds.items():
+            csv_writer.writerow([key, value])
+        for key, value in anti_motifs_thresholds.items():
+            csv_writer.writerow([key, value])
 
     final_motifs_score = {}
     tuning_parameter = input_dict["tuning_param"]

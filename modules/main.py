@@ -173,12 +173,12 @@ default_user_inp_raw = {
 }
 
 
-def create_csv_for_organism(csv_directory_name: str,
-                            csv_file_name: str,
-                            organism_name: str,
-                            mast_file_name: str,
-                            user_input):
-    base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
+def create_e_values_csv_for_organism(csv_directory_name: str,
+                                     csv_file_name: str,
+                                     organism_name: str,
+                                     mast_file_name: str,
+                                     user_input):
+    base_directory = os.path.join(artifacts_directory, "promoters")
     csv_dir_path = os.path.join(base_directory, csv_directory_name)
     Path(csv_dir_path).mkdir(parents=True, exist_ok=True)
     csv_file_path = os.path.join(csv_dir_path, csv_file_name)
@@ -221,12 +221,22 @@ def create_csv_for_organism_intergenic(organism_name: str, user_input):
     csv_file_name = F"{organism_name}.csv"
     csv_directory_name = "intergenic_csv_files"
     mast_file_name = F"intergenic_mast\\motif streme seq {organism_name} 100 200\\mast.xml".replace(" ", "_")
-    return create_csv_for_organism(csv_directory_name=csv_directory_name,
-                                   csv_file_name=csv_file_name,
-                                   organism_name=organism_name,
-                                   mast_file_name=mast_file_name,
-                                   user_input=user_input)
+    return create_e_values_csv_for_organism(csv_directory_name=csv_directory_name,
+                                            csv_file_name=csv_file_name,
+                                            organism_name=organism_name,
+                                            mast_file_name=mast_file_name,
+                                            user_input=user_input)
 
+
+def create_csv_for_organism(organism_name: str, user_input):
+    csv_file_name = F"{organism_name}.csv"
+    csv_directory_name = os.path.join(artifacts_directory, "e-values")
+    mast_file_name = os.path.join(F"mast_{organism_name.replace(' ', '_')}", "mast.xml")
+    return create_e_values_csv_for_organism(csv_directory_name=csv_directory_name,
+                                            csv_file_name=csv_file_name,
+                                            organism_name=organism_name,
+                                            mast_file_name=mast_file_name,
+                                            user_input=user_input)
 
 def extract_intergenic_region_evalues(organism_name: str):
     base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
@@ -517,14 +527,10 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         input_dict["organisms"] = selected_orgs
         promoters.promoterModule.run_module(input_dict)
 
-        exit(0)
-
-        # intergenic promoters
         for organism_name in input_dict["organisms"].keys():
-            cai_scores, evalues = create_csv_for_organism_intergenic(organism_name, input_dict)
-            inter_e_values = extract_intergenic_region_evalues(organism_name)
-            analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values)
-        logger.info("Intergenic end!")
+            cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
+            # inter_e_values = extract_intergenic_region_evalues(organism_name)
+            # analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values)
         exit(0)
 
         ### unit 1 ############################################

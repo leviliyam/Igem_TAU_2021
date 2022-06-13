@@ -56,6 +56,16 @@ class promoterModule(object):
         motif_file_path = create_final_motif_xml(full_input_dict)
         logger.info("motif file path: %s", motif_file_path)
 
+        # Calculate e-values for all the organisms
+        for organism_name in full_input_dict["organisms"].keys():
+            org_promoter_dir = os.path.join(deopt_path, organism_name)
+            # we want to run mast against all promoters, on order to compare e-values of highly expressed vs.
+            # lowly expressed
+            org_promoter_file_path = os.path.join(org_promoter_dir, F"{organism_name}_100_200.fasta")
+            run_mast(motif_file_path, org_promoter_file_path, optional_name=organism_name.replace(" ", "_"))
+
+        return
+
         promoter_file_path = create_unified_promoters_file(full_input_dict)
         mast_output_folder = run_mast(motif_file_path, promoter_file_path)
         logger.info("mast output folder: %s", mast_output_folder)

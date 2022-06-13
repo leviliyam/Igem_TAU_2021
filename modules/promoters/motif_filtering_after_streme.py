@@ -39,7 +39,7 @@ def is_org_in_dict(fname, input_dict):
     return org_name in input_dict["organisms"]
 
 
-def find_all_inter_files(base_directory=None):
+def find_all_motif_files(base_directory=None):
     """
     Finds all xml STREME output files from intergenic runs
 
@@ -80,13 +80,13 @@ def unionize_motifs(input_dict) -> et.ElementTree:
 
     @return: a pointer to an Element object containing the data in xml format
     """
-    inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
-    base_file = inter_files[0]
+    motif_files = [str(f) for f in find_all_motif_files() if is_optimized(f, input_dict)]
+    base_file = motif_files[0]
     base_tree = et.parse(base_file)
     base_root = base_tree.getroot()
     base_element = base_root.find('.//motifs')
 
-    for xml_file in inter_files[1:]:
+    for xml_file in motif_files[1:]:
         tree = et.parse(xml_file)
         root = tree.getroot()
         element = root.find('.//motifs')
@@ -190,7 +190,7 @@ def multi_filter_motifs(tree, input_dict):
     #   4. Compare e-values of optimized vs. deoptimized when looking at all promoters (not just HE)
     #   5. Repeat for subset of populations from mgnify DB - calcualte HE genes, calculate promoters, continue with analysis
     unified_motifs = os.path.join(start, 'unionized_motifs.xml')
-    inter_files = [str(f) for f in find_all_inter_files() if is_optimized(f, input_dict)]
+    inter_files = [str(f) for f in find_all_motif_files() if is_optimized(f, input_dict)]
     anti_motif_files = [str(f) for f in find_all_anti_motif_files() if is_org_in_dict(f, input_dict) and not
                         is_optimized(f, input_dict)]
     candidates_pssms = extract_pssm_from_xml(unified_motifs)

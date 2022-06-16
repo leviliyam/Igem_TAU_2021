@@ -42,6 +42,7 @@ Calls MAST to rank the presence of motifs in a sequence set
 """
 def mast(motif_path, seq_path, output_path=".", ev=10):
     command = "mast -oc " + output_path + " -nostatus -norc -remcorr -ev " + str(ev) + " " + motif_path + " " + seq_path
+    print(F"mast command: '{command}'")
     os.system(command)
 
 
@@ -127,7 +128,8 @@ def run_mast(motif_path, promoter_path, optional_name = None):
         out_name = F"mast_{optional_name}"
     else:
         out_name = '_'.join(['motif', motif_name, 'seq', promoter_name])
-    out_path = os.path.join(start, out_name)
+
+    out_path = os.path.join(mast_output_dir, out_name)
     logger.info("mast out path: %s", out_path)
     mast(motif_path, promoter_path, output_path=out_path)
 

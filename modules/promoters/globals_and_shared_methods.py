@@ -7,6 +7,8 @@ global dna, start, opt_path, deopt_path, end, organism_dict
 dna = "ACGT"
 base_path = str(Path(__file__).parent.resolve())
 artifacts_path = os.path.join(str(Path(base_path).parent.resolve()), "artifacts")
+mast_output_dir = os.path.join(artifacts_path, "promoters", "mast")
+Path(mast_output_dir).mkdir(parents=True, exist_ok=True)
 start = os.path.join(artifacts_path, 'promoters_not_for_user')
 o_path = 'opt_files'
 d_path = 'deopt_files'

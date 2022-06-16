@@ -185,8 +185,8 @@ def multi_filter_motifs(tree, input_dict):
     @return: the name of the new motif file created
     """
     # TODO modifications:
-    #   2. Log experimental thresholds for every run
     #   3. Compare e-values of optimized vs. deoptimized organisms
+    #       * run opt vs. deopt and calculate p-value for the distribution of the e-values (how to do for a group)
     #   4. Compare e-values of optimized vs. deoptimized when looking at all promoters (not just HE)
     #   5. Repeat for subset of populations from mgnify DB - calcualte HE genes, calculate promoters, continue with analysis
     unified_motifs = os.path.join(start, 'unionized_motifs.xml')

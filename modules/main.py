@@ -7,7 +7,9 @@ import typing
 import csv
 import json
 import random
+import shutil
 import xml.etree.ElementTree as et
+from scipy.stats import mannwhitneyu
 
 from matplotlib import pyplot
 import numpy as np
@@ -178,7 +180,7 @@ def create_e_values_csv_for_organism(csv_directory_name: str,
                                      organism_name: str,
                                      mast_file_name: str,
                                      user_input):
-    base_directory = os.path.join(artifacts_directory, "promoters")
+    base_directory = os.path.join(artifacts_directory, "promoters", "mast")
     csv_dir_path = os.path.join(base_directory, csv_directory_name)
     Path(csv_dir_path).mkdir(parents=True, exist_ok=True)
     csv_file_path = os.path.join(csv_dir_path, csv_file_name)
@@ -230,13 +232,14 @@ def create_csv_for_organism_intergenic(organism_name: str, user_input):
 
 def create_csv_for_organism(organism_name: str, user_input):
     csv_file_name = F"{organism_name}.csv"
-    csv_directory_name = os.path.join(artifacts_directory, "e-values")
+    csv_directory_name = "e_values"
     mast_file_name = os.path.join(F"mast_{organism_name.replace(' ', '_')}", "mast.xml")
     return create_e_values_csv_for_organism(csv_directory_name=csv_directory_name,
                                             csv_file_name=csv_file_name,
                                             organism_name=organism_name,
                                             mast_file_name=mast_file_name,
                                             user_input=user_input)
+
 
 def extract_intergenic_region_evalues(organism_name: str):
     base_directory = os.path.join(artifacts_directory, "promoters_not_for_user")
@@ -257,6 +260,7 @@ def extract_intergenic_region_evalues(organism_name: str):
         evalues.append(promoter_evalue)
 
     return evalues
+
 
 def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
     # if not cai_scores:
@@ -487,6 +491,86 @@ def analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values):
     # pyplot.clf()
 
 
+def _plot_evalues_histogram_with_mean_and_median(organism_name, evalues, directory, wanted, color):
+    float_evalues = [float(x) for x in evalues]
+    mean_evalues = statistics.mean(float_evalues)
+    median_evalues = statistics.median(float_evalues)
+    ax = pyplot.subplot(121)
+    pyplot.title(F"Promoters {wanted}\n{organism_name}")
+    pyplot.xlabel("e-value")
+    pyplot.ylabel("# promoters")
+    pyplot.hist(float_evalues, bins=20, color=F"tab:{color}", edgecolor='k')
+    pyplot.axvline(mean_evalues, color='k', linestyle='dashed', linewidth=2, label=F"mean: {mean_evalues:.3f}")
+    pyplot.axvline(median_evalues, color='k', linestyle='dashdot', linewidth=1, label=F"median: {median_evalues:.3f}")
+    pyplot.legend()
+
+    pyplot.tight_layout()
+
+    # logger.info(F"{organism_name} P value: {p}")
+    plot_file_name = os.path.join(directory, F"{organism_name}.png")
+    pyplot.savefig(plot_file_name)
+    pyplot.clf()
+
+    return mean_evalues, median_evalues
+
+
+def analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unwanted_cai_scores, directory_name=None):
+    plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
+    Path(plots_directory).mkdir(parents=True, exist_ok=True)
+
+    percentile = 20
+
+    # --------------------------
+    # Calcualte e-value histogram for promoters
+    # --------------------------
+    if any(len(evalues) == 0 for evalues in wanted_e_values.values()) or any(len(evalues) == 0 for evalues in
+                                                                       unwanted_e_values.values()):
+        logger.info(F"missing evalues")
+        exit(1)
+
+    direcotry_name = directory_name or "e-value histograms"
+    directory = os.path.join(plots_directory, direcotry_name)
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    means_wanted = []
+    medians_wanted = []
+    for organism_name, evalues in wanted_e_values.items():
+        mean_evalues, median_evalues = _plot_evalues_histogram_with_mean_and_median(organism_name,
+                                                                                    evalues,
+                                                                                    directory,
+                                                                                    wanted="wanted",
+                                                                                    color="blue")
+        means_wanted.append(mean_evalues)
+        medians_wanted.append(median_evalues)
+
+    mean_wanted = np.mean(means_wanted)
+    median_wanted = np.mean(medians_wanted)
+
+    means_unwanted = []
+    medians_unwanted = []
+    for organism_name, evalues in unwanted_e_values.items():
+        mean_evalues, median_evalues = _plot_evalues_histogram_with_mean_and_median(organism_name,
+                                                                                    evalues,
+                                                                                    directory,
+                                                                                    wanted="unwanted",
+                                                                                    color="red")
+        means_unwanted.append(mean_evalues)
+        medians_unwanted.append(median_evalues)
+    mean_unwanted = np.mean(means_unwanted)
+    median_unwanted = np.mean(medians_unwanted)
+
+    logger.info(f"Wanted hosts e_value mean: {mean_wanted}.\nWanted hosts e_value median: {median_wanted}")
+    logger.info(f"Unwanted hosts e_value mean: {mean_unwanted}.\nUnwanted hosts e_value median: {median_unwanted}")
+
+    import itertools
+    if len(wanted_e_values.keys()) == 1 and len(unwanted_e_values.keys()) == 1:
+        wanted_evalues = list(itertools.chain(*wanted_e_values.values()))
+        wanted_evalues = [float(evalue) for evalue in wanted_evalues]
+        unwanted_evalues = list(itertools.chain(*unwanted_e_values.values()))
+        unwanted_evalues = [float(evalue) for evalue in unwanted_evalues]
+        w, p = mannwhitneyu(x=wanted_evalues, y=unwanted_evalues)
+        logger.info(f"wilcoxon rank: {w}. p_value is: {p}")
+
+
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
     # user_inp_raw = user_input_dict or default_user_inp_raw
@@ -511,27 +595,79 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         with open("parsed_input.json", "r") as user_input_file:
              input_dict = json.load(user_input_file)
 
-        organisms_names = list(input_dict["organisms"].keys())
-        organisms_count = len(organisms_names)
-        wanted_count = 2
-        unwanted_count = 2
+        should_iterate_all = True
+        plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
+        if os.path.exists(plots_directory):
+            shutil.rmtree(plots_directory)
 
-        selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
-        selected_orgs = {}
-        for i, selected_index in enumerate(selected_orgs_indices):
-            org = organisms_names[selected_index]
-            selected_orgs[org] = input_dict["organisms"][org]
-            if i >= wanted_count:
-                selected_orgs[org]["optimized"] = False
+        if should_iterate_all:
+            all_organisms = input_dict["organisms"]
+            for organism_wanted in all_organisms.keys():
+                for organism_unwanted in all_organisms.keys():
+                    if organism_wanted == organism_unwanted:
+                        continue
+                    selected_orgs = {}
+                    selected_orgs[organism_wanted] = all_organisms[organism_wanted]
+                    selected_orgs[organism_unwanted] = all_organisms[organism_unwanted]
+                    selected_orgs[organism_unwanted]["optimized"] = False
 
-        input_dict["organisms"] = selected_orgs
-        promoters.promoterModule.run_module(input_dict)
+                    input_dict["organisms"] = selected_orgs
+                    promoters.promoterModule.run_module(input_dict)
 
-        for organism_name in input_dict["organisms"].keys():
-            cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
-            # inter_e_values = extract_intergenic_region_evalues(organism_name)
-            # analyze_intergenic(organism_name, cai_scores, evalues, inter_e_values)
-        exit(0)
+                    wanted_e_values = {}
+                    wanted_cai_scores = {}
+                    unwanted_e_values = {}
+                    unwanted_cai_scores = {}
+                    for organism_name in input_dict["organisms"].keys():
+                        cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
+                        is_optimized = input_dict["organisms"][organism_name]["optimized"]
+                        if is_optimized:
+                            wanted_e_values[organism_name] = evalues
+                            wanted_cai_scores[organism_name] = cai_scores
+                        else:
+                            unwanted_e_values[organism_name] = evalues
+                            unwanted_cai_scores[organism_name] = cai_scores
+
+                    analyze_new_model(wanted_e_values,
+                                      wanted_cai_scores,
+                                      unwanted_e_values,
+                                      unwanted_cai_scores,
+                                      directory_name=F"{organism_wanted}_{organism_unwanted}")
+
+        else:
+            organisms_names = list(input_dict["organisms"].keys())
+            organisms_count = len(organisms_names)
+            wanted_count = 1
+            unwanted_count = 1
+
+            selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
+            selected_orgs = {}
+            for i, selected_index in enumerate(selected_orgs_indices):
+                org = organisms_names[selected_index]
+                selected_orgs[org] = input_dict["organisms"][org]
+                if i >= wanted_count:
+                    selected_orgs[org]["optimized"] = False
+
+            input_dict["organisms"] = selected_orgs
+            promoters.promoterModule.run_module(input_dict)
+
+            wanted_e_values = {}
+            wanted_cai_scores = {}
+            unwanted_e_values = {}
+            unwanted_cai_scores = {}
+            for organism_name in input_dict["organisms"].keys():
+                cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
+                is_optimized = input_dict["organisms"][organism_name]["optimized"]
+                if is_optimized:
+                    wanted_e_values[organism_name] = evalues
+                    wanted_cai_scores[organism_name] = cai_scores
+                else:
+                    unwanted_e_values[organism_name] = evalues
+                    unwanted_cai_scores[organism_name] = cai_scores
+
+            analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unwanted_cai_scores)
+            logger.info("End of analysis")
+            exit(0)
 
         ### unit 1 ############################################
         if model_preferences.restriction_enzymes or model_preferences.translation:

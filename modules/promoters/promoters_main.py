@@ -59,11 +59,14 @@ class promoterModule(object):
         # Calculate e-values for all the organisms
         for organism_name in full_input_dict["organisms"].keys():
             org_promoter_dir = os.path.join(deopt_path, organism_name)
-            # we want to run mast against all promoters, on order to compare e-values of highly expressed vs.
+            # we want to run mast against all promoters, in order to compare e-values of highly expressed vs.
             # lowly expressed
-            org_promoter_file_path = os.path.join(org_promoter_dir, F"{organism_name}_100_200.fasta")
+            org_promoter_file_path = os.path.join(org_promoter_dir, F"{organism_name}_33_200.fasta")
+            org_promoter_file_path = org_promoter_file_path.replace(" ", "_")
+            logger.info(F"Run mast for {organism_name}")
             run_mast(motif_file_path, org_promoter_file_path, optional_name=organism_name.replace(" ", "_"))
 
+        logger.info("Finished running promoters module")
         return
 
         promoter_file_path = create_unified_promoters_file(full_input_dict)

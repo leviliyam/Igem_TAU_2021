@@ -6,6 +6,7 @@ import random
 from collections import defaultdict
 from modules.promoters.globals_and_shared_methods import *
 from modules.promoters.intersect_motifs_2_org_final import *
+from modules.promoters import promoters_exceptions
 from pathlib import Path
 import numpy as np
 
@@ -81,6 +82,12 @@ def unionize_motifs(input_dict) -> et.ElementTree:
     @return: a pointer to an Element object containing the data in xml format
     """
     motif_files = [str(f) for f in find_all_motif_files() if is_optimized(f, input_dict)]
+    if len(motif_files) == 0:
+        import pdb
+        pdb.set_trace()
+
+        raise promoters_exceptions.MissingMotifFiles
+
     base_file = motif_files[0]
     base_tree = et.parse(base_file)
     base_root = base_tree.getroot()
@@ -193,21 +200,16 @@ def multi_filter_motifs(tree, input_dict):
     inter_files = [str(f) for f in find_all_motif_files() if is_optimized(f, input_dict)]
     anti_motif_files = [str(f) for f in find_all_anti_motif_files() if is_org_in_dict(f, input_dict) and not
                         is_optimized(f, input_dict)]
+    if len(inter_files) == 0 or len(anti_motif_files) == 0:
+        print("Missing inter files or anti motif files. skipping run")
+        raise promoters_exceptions.MissingMotifFiles
+
     candidates_pssms = extract_pssm_from_xml(unified_motifs)
 
     inter_files_thresholds = calculate_experimental_threshold_per_motif_set(inter_files)
     wanted_organisms_score = compare_with_motifs(candidates_pssms, inter_files, inter_files_thresholds)
     anti_motifs_thresholds = calculate_experimental_threshold_per_motif_set(anti_motif_files)
     unwanted_organisms_score = compare_with_motifs(candidates_pssms, anti_motif_files, anti_motifs_thresholds)
-
-    Path(os.path.join(artifacts_path, "promoters")).mkdir(parents=True, exist_ok=True)
-    with open(os.path.join(artifacts_path, "promoters", "experimental_p_value.csv"), "w") as p_value_file:
-        csv_writer = csv.writer(p_value_file)
-        csv_writer.writerow(["organism_motifs_file", "p_value"])
-        for key, value in inter_files_thresholds.items():
-            csv_writer.writerow([key, value])
-        for key, value in anti_motifs_thresholds.items():
-            csv_writer.writerow([key, value])
 
     final_motifs_score = {}
     tuning_parameter = input_dict["tuning_param"]
@@ -220,14 +222,16 @@ def multi_filter_motifs(tree, input_dict):
     final_motif_set = [pssm_ind for pssm_ind, pssm_score in final_motifs_score.items() if
                        pssm_score >= percentile_threshold]
 
-    for i, motif in enumerate(tree.findall('motif')):
-        if i not in final_motif_set:
-            tree.remove(motif)
-    fname = 'final_motif_set.xml'
+    element = tree.find("motifs")
+    for motif in element.findall('motif'):
+        motif_id = motif.get("id")
+        if motif_id not in final_motif_set:
+            element.remove(motif)
+    fname = F'final_motif_set_{len(final_motif_set)}_motifs.xml'
     fname = os.path.join(start, fname)
     tree.write(fname)
     
-    return fname
+    return fname, inter_files_thresholds, anti_motifs_thresholds
 
 
 def create_final_motif_xml(input_dict):
@@ -241,7 +245,7 @@ def create_final_motif_xml(input_dict):
     """
 
     tree = unionize_motifs(input_dict)
-    motif_file = multi_filter_motifs(tree, input_dict)
+    motif_file, inter_files_thresholds, anti_motif_thresholds = multi_filter_motifs(tree, input_dict)
     
-    return motif_file
+    return motif_file, inter_files_thresholds, anti_motif_thresholds
 

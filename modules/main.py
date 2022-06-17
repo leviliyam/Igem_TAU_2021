@@ -7,7 +7,9 @@ import typing
 import csv
 import json
 import random
+import string
 import shutil
+import itertools
 import xml.etree.ElementTree as et
 from scipy.stats import mannwhitneyu
 
@@ -21,6 +23,7 @@ artifacts_directory = Path(os.path.join(str(Path(__file__).parent.resolve()), "a
 artifacts_directory.mkdir(parents=True, exist_ok=True)
 
 from modules import Zscore_calculation, user_IO, RE, ORF, promoters
+from modules.promoters import promoters_exceptions
 from modules import models
 
 logger = LoggerFactory.create_logger("main")
@@ -180,8 +183,9 @@ def create_e_values_csv_for_organism(csv_directory_name: str,
                                      organism_name: str,
                                      mast_file_name: str,
                                      user_input):
-    base_directory = os.path.join(artifacts_directory, "promoters", "mast")
+    base_directory = os.path.join(artifacts_directory, "promoters")
     csv_dir_path = os.path.join(base_directory, csv_directory_name)
+    mast_dir_path = os.path.join(base_directory, "mast")
     Path(csv_dir_path).mkdir(parents=True, exist_ok=True)
     csv_file_path = os.path.join(csv_dir_path, csv_file_name)
     organism_info = user_input["organisms"][organism_name]
@@ -190,7 +194,7 @@ def create_e_values_csv_for_organism(csv_directory_name: str,
         header = ["gene_name", "gene_cai_score", "gene_promoter_evalue"]
         csv_writer.writerow(header)
 
-        base_file = os.path.join(base_directory, mast_file_name)
+        base_file = os.path.join(mast_dir_path, mast_file_name)
         tree = et.parse(base_file)
         root = tree.getroot()
 
@@ -230,9 +234,9 @@ def create_csv_for_organism_intergenic(organism_name: str, user_input):
                                             user_input=user_input)
 
 
-def create_csv_for_organism(organism_name: str, user_input):
+def create_csv_for_organism(organism_name: str, user_input, directory_name):
     csv_file_name = F"{organism_name}.csv"
-    csv_directory_name = "e_values"
+    csv_directory_name = os.path.join("plots", directory_name)
     mast_file_name = os.path.join(F"mast_{organism_name.replace(' ', '_')}", "mast.xml")
     return create_e_values_csv_for_organism(csv_directory_name=csv_directory_name,
                                             csv_file_name=csv_file_name,
@@ -514,23 +518,26 @@ def _plot_evalues_histogram_with_mean_and_median(organism_name, evalues, directo
     return mean_evalues, median_evalues
 
 
-def analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unwanted_cai_scores, directory_name=None):
+def analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unwanted_cai_scores, motif_file_path, directory_name=None):
     plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
     Path(plots_directory).mkdir(parents=True, exist_ok=True)
 
-    percentile = 20
+    direcotry_name = directory_name or "e-value histograms"
+    directory = os.path.join(plots_directory, direcotry_name)
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
+    # Log the motif file
+    shutil.copy(motif_file_path, directory)
 
     # --------------------------
     # Calcualte e-value histogram for promoters
     # --------------------------
     if any(len(evalues) == 0 for evalues in wanted_e_values.values()) or any(len(evalues) == 0 for evalues in
-                                                                       unwanted_e_values.values()):
+                                                                             unwanted_e_values.values()):
         logger.info(F"missing evalues")
-        exit(1)
+        return
 
-    direcotry_name = directory_name or "e-value histograms"
-    directory = os.path.join(plots_directory, direcotry_name)
-    Path(directory).mkdir(parents=True, exist_ok=True)
+
     means_wanted = []
     medians_wanted = []
     for organism_name, evalues in wanted_e_values.items():
@@ -542,9 +549,6 @@ def analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unw
         means_wanted.append(mean_evalues)
         medians_wanted.append(median_evalues)
 
-    mean_wanted = np.mean(means_wanted)
-    median_wanted = np.mean(medians_wanted)
-
     means_unwanted = []
     medians_unwanted = []
     for organism_name, evalues in unwanted_e_values.items():
@@ -555,20 +559,48 @@ def analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unw
                                                                                     color="red")
         means_unwanted.append(mean_evalues)
         medians_unwanted.append(median_evalues)
-    mean_unwanted = np.mean(means_unwanted)
-    median_unwanted = np.mean(medians_unwanted)
 
-    logger.info(f"Wanted hosts e_value mean: {mean_wanted}.\nWanted hosts e_value median: {median_wanted}")
-    logger.info(f"Unwanted hosts e_value mean: {mean_unwanted}.\nUnwanted hosts e_value median: {median_unwanted}")
+    with open(os.path.join(directory, "e_value_stats.csv"), "w") as e_value_file:
+        csv_writer = csv.writer(e_value_file)
+        csv_writer.writerow(["parameter_name", "value"])
+        #  Wanted hosts
+        csv_writer.writerow(["mean_of_mean_e_value_wanted", np.mean(means_wanted)])
+        csv_writer.writerow(["median_of_mean_e_value_wanted", np.median(means_wanted)])
+        csv_writer.writerow(["mean_of_median_e_value_wanted",  np.mean(medians_wanted)])
+        csv_writer.writerow(["median_of_median_e_value_wanted",  np.median(medians_wanted)])
+        # Unwanted hosts
+        csv_writer.writerow(["mean_of_mean_e_value_unwanted", np.mean(means_unwanted)])
+        csv_writer.writerow(["median_of_mean_e_value_unwanted", np.median(means_unwanted)])
+        csv_writer.writerow(["mean_of_median_e_value_unwanted", np.mean(medians_unwanted)])
+        csv_writer.writerow(["median_of_median_e_value_unwanted", np.median(medians_unwanted)])
 
-    import itertools
-    if len(wanted_e_values.keys()) == 1 and len(unwanted_e_values.keys()) == 1:
-        wanted_evalues = list(itertools.chain(*wanted_e_values.values()))
-        wanted_evalues = [float(evalue) for evalue in wanted_evalues]
-        unwanted_evalues = list(itertools.chain(*unwanted_e_values.values()))
-        unwanted_evalues = [float(evalue) for evalue in unwanted_evalues]
-        w, p = mannwhitneyu(x=wanted_evalues, y=unwanted_evalues)
-        logger.info(f"wilcoxon rank: {w}. p_value is: {p}")
+        logger.info(f"Wanted hosts e_value mean: {np.mean(means_wanted)}.\nWanted hosts e_value median: {np.mean(medians_wanted)}")
+        logger.info(f"Unwanted hosts e_value mean: {np.mean(means_unwanted)}.\nUnwanted hosts e_value median: {np.mean(medians_unwanted)}")
+
+        if len(wanted_e_values.keys()) == 1 and len(unwanted_e_values.keys()) == 1:
+            wanted_evalues = list(itertools.chain(*wanted_e_values.values()))
+            wanted_evalues = [float(evalue) for evalue in wanted_evalues]
+            unwanted_evalues = list(itertools.chain(*unwanted_e_values.values()))
+            unwanted_evalues = [float(evalue) for evalue in unwanted_evalues]
+            w, p = mannwhitneyu(x=wanted_evalues, y=unwanted_evalues)
+
+            csv_writer.writerow(["wilcoxon_rank_wanted_vs_unwanted_e_value", w])
+            csv_writer.writerow(["p_value_wanted_vs_unwanted_e_value", p])
+            logger.info(f"wilcoxon rank: {w}. p_value is: {p}")
+
+
+def _log_experimental_p_values(inter_files_thresholds, anti_motifs_thresholds, directory_name):
+    plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
+    directory = os.path.join(plots_directory, directory_name)
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
+    with open(os.path.join(directory, "experimental_p_value.csv"), "w") as p_value_file:
+        csv_writer = csv.writer(p_value_file)
+        csv_writer.writerow(["organism_motifs_file", "p_value"])
+        for key, value in inter_files_thresholds.items():
+            csv_writer.writerow([key, value])
+        for key, value in anti_motifs_thresholds.items():
+            csv_writer.writerow([key, value])
 
 
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
@@ -606,20 +638,29 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                 for organism_unwanted in all_organisms.keys():
                     if organism_wanted == organism_unwanted:
                         continue
+
+                    directory_name = F"{organism_wanted}_{organism_unwanted}"
+
                     selected_orgs = {}
                     selected_orgs[organism_wanted] = all_organisms[organism_wanted]
+                    selected_orgs[organism_wanted]["optimized"] = True
                     selected_orgs[organism_unwanted] = all_organisms[organism_unwanted]
                     selected_orgs[organism_unwanted]["optimized"] = False
 
                     input_dict["organisms"] = selected_orgs
-                    promoters.promoterModule.run_module(input_dict)
+                    try:
+                        motif_file_path, inter_files_thresholds, anti_motif_thresholds = promoters.promoterModule.run_module(input_dict)
+                    except promoters_exceptions.MissingMotifFiles:
+                        print(F"Missing motif files for {organism_wanted} or {organism_unwanted}")
+                        continue
+                    _log_experimental_p_values(inter_files_thresholds, anti_motif_thresholds, directory_name)
 
                     wanted_e_values = {}
                     wanted_cai_scores = {}
                     unwanted_e_values = {}
                     unwanted_cai_scores = {}
                     for organism_name in input_dict["organisms"].keys():
-                        cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
+                        cai_scores, evalues = create_csv_for_organism(organism_name, input_dict, directory_name)
                         is_optimized = input_dict["organisms"][organism_name]["optimized"]
                         if is_optimized:
                             wanted_e_values[organism_name] = evalues
@@ -632,13 +673,17 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                                       wanted_cai_scores,
                                       unwanted_e_values,
                                       unwanted_cai_scores,
-                                      directory_name=F"{organism_wanted}_{organism_unwanted}")
+                                      motif_file_path,
+                                      directory_name=directory_name)
 
         else:
             organisms_names = list(input_dict["organisms"].keys())
             organisms_count = len(organisms_names)
             wanted_count = 1
             unwanted_count = 1
+
+            random_suffix = ''.join(random.choice(string.ascii_letters) for _ in range(5))
+            directory_name = F"Wanted_{wanted_count}_unwanted_{unwanted_count}_{random_suffix}"
 
             selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
             selected_orgs = {}
@@ -649,7 +694,13 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                     selected_orgs[org]["optimized"] = False
 
             input_dict["organisms"] = selected_orgs
-            promoters.promoterModule.run_module(input_dict)
+            try:
+                motif_file_path, inter_files_thresholds, anti_motif_thresholds = promoters.promoterModule.run_module(input_dict)
+                _log_experimental_p_values(inter_files_thresholds, anti_motif_thresholds, directory_name)
+            except promoters_exceptions.MissingMotifFiles:
+                print(F"Missing motif files for one of the files in F{selected_orgs.keys()}")
+                print("Exiting")
+                exit(0)
 
             wanted_e_values = {}
             wanted_cai_scores = {}
@@ -665,9 +716,15 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                     unwanted_e_values[organism_name] = evalues
                     unwanted_cai_scores[organism_name] = cai_scores
 
-            analyze_new_model(wanted_e_values, wanted_cai_scores, unwanted_e_values, unwanted_cai_scores)
-            logger.info("End of analysis")
-            exit(0)
+            analyze_new_model(wanted_e_values,
+                              wanted_cai_scores,
+                              unwanted_e_values,
+                              unwanted_cai_scores,
+                              motif_file_path,
+                              directory_name=directory_name)
+
+        logger.info("The end")
+        exit(0)
 
         ### unit 1 ############################################
         if model_preferences.restriction_enzymes or model_preferences.translation:

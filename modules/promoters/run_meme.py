@@ -42,7 +42,6 @@ Calls MAST to rank the presence of motifs in a sequence set
 """
 def mast(motif_path, seq_path, output_path=".", ev=10):
     command = "mast -oc " + output_path + " -nostatus -norc -remcorr -ev " + str(ev) + " " + motif_path + " " + seq_path
-    print(F"mast command: '{command}'")
     os.system(command)
 
 
@@ -78,7 +77,6 @@ def run_streme():
     create_folder(real_out_path)
 
     # First run: opt organism vs. intergenic - finding transcription-enhancing motifs
-    # TODO - should be changed to opt_path
     for org in glob.glob(os.path.join(deopt_path, "*", "")):
         org_name = org.split(os.sep)[-2]
         dir_name = os.path.join(deopt_path, org_name)

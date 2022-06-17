@@ -53,7 +53,7 @@ class promoterModule(object):
         #
         # exit(0)
 
-        motif_file_path = create_final_motif_xml(full_input_dict)
+        motif_file_path, inter_files_thresholds, anti_motif_thresholds = create_final_motif_xml(full_input_dict)
         logger.info("motif file path: %s", motif_file_path)
 
         # Calculate e-values for all the organisms
@@ -67,7 +67,7 @@ class promoterModule(object):
             run_mast(motif_file_path, org_promoter_file_path, optional_name=organism_name.replace(" ", "_"))
 
         logger.info("Finished running promoters module")
-        return
+        return motif_file_path, inter_files_thresholds, anti_motif_thresholds
 
         promoter_file_path = create_unified_promoters_file(full_input_dict)
         mast_output_folder = run_mast(motif_file_path, promoter_file_path)

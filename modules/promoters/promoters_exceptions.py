@@ -1,0 +1,2 @@
+class MissingMotifFiles(Exception):
+    pass

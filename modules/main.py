@@ -30,8 +30,8 @@ logger = LoggerFactory.create_logger("main")
 
 current_directory = Path(__file__).parent.resolve()
 # base_path = os.path.join(Path(current_directory).parent.resolve(), "example_data")
-# base_path = "/arabidopsis_microbiome"
-base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
+base_path = "/arabidopsis_microbiome"
+# base_path = "C:\\Users\\Kama\\Documents\\Moran\\biomedical-engineering\\microbiome-optimization\\arabidopsis_microbiome"
 
 default_user_inp_raw = {
     'sequence': os.path.join(base_path, 'mCherry_original.fasta'),
@@ -604,6 +604,7 @@ def _log_experimental_p_values(inter_files_thresholds, anti_motifs_thresholds, d
 
 
 def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                mgnify: bool = False,
                 model_preferences_dict: typing.Optional[typing.Dict[str, str]] = None):
     # user_inp_raw = user_input_dict or default_user_inp_raw
     # 
@@ -615,17 +616,20 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
     ) if model_preferences_dict is not None else models.ModelPreferences.init_from_config()
 
     try:
-        # input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
-        # 
-        # # Store parsed input as json file
-        # with open("parsed_input.json", "w") as user_input_file:
-        #     json.dump(input_dict, user_input_file)
-        # 
-        # exit(0)
+        if mgnify:
+            input_dict = user_IO.UserInputModule.run_for_mgnify(user_input_dict)
+        else:
+            # input_dict = user_IO.UserInputModule.run_module(user_inp_raw)   # keys: sequence, selected_prom, organisms
+            #
+            # # Store parsed input as json file
+            # with open("parsed_input.json", "w") as user_input_file:
+            #     json.dump(input_dict, user_input_file)
+            #
+            # exit(0)
 
-        # Read input from file
-        with open("parsed_input.json", "r") as user_input_file:
-             input_dict = json.load(user_input_file)
+            # Read input from file
+            with open("parsed_input.json", "r") as user_input_file:
+                 input_dict = json.load(user_input_file)
 
         should_iterate_all = False
         plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
@@ -677,9 +681,9 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                                       directory_name=directory_name)
 
         else:
-            analysis_count = 7
+            analysis_count = 1
             all_organisms = input_dict["organisms"]
-            for i in range(25):
+            for i in range(10):
                 logger.info(F"Starting iteration #{i}")
                 organisms_names = list(all_organisms.keys())
                 organisms_count = len(organisms_names)
@@ -859,12 +863,51 @@ def create_unified_csv():
     print("success")
 
 
+def generate_mgnify_user_input(catalogue_name: str, n_organisms: int, percent_optimized: float = 0.5):
+    inp_dict = {
+        'sequence': os.path.join(base_path, 'mCherry_original.fasta'),
+        'tuning_param': 0.5,
+        'organisms': {},
+    }
+    catalogue_path = Path(os.path.join("mgnify_files", catalogue_name))
+    genomes_list = Path(catalogue_path).glob("*")
+
+    opt_genomes = random.sample(genomes_list,
+                                round(n_organisms * percent_optimized))
+
+    for opt_genome in opt_genomes:
+        genome_name = opt_genome.name
+        inp_dict['organisms'][genome_name] = {
+            'genome_path': opt_genome,
+            'optimized': True,
+            'expression_csv': None,
+        }
+
+    deopt_genomes = random.sample([i for i in genomes_list if i not in opt_genomes],
+                                  round(n_organisms * (1 - percent_optimized)))
+
+    for deopt_genome in deopt_genomes:
+        genome_name = deopt_genome.name
+        inp_dict['organisms'][genome_name] = {
+            'genome_path': deopt_genome,
+            'optimized': False,
+            'expression_csv': None,
+        }
+
+    return inp_dict
+
+
 if __name__ == "__main__":
-    create_unified_csv()
-    exit(0)
+    # create_unified_csv()
+    # exit(0)
+    mgnify = True
+    mgnify_user_input = None
+    if mgnify:
+        mgnify_user_input = generate_mgnify_user_input(catalogue_name="human-oral-v1-0",
+                                                       n_organisms=2)
 
     tic = time.time()
-    run_modules()
+    run_modules(user_input_dict=mgnify_user_input, mgnify=mgnify)
     toc = time.time()
     modules_run_time = toc - tic
     print('Total modules run time: ', modules_run_time)

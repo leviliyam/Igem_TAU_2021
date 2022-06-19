@@ -14,18 +14,12 @@ class UserInputModule(object):
     def get_name() -> str:
         return "User Input"
 
-
-
-
     @classmethod
     def run_module(cls, user_inp_raw: typing.Dict) -> typing.Dict:
         logger.info('##########################')
         logger.info('# USER INPUT INFORMATION #')
         logger.info('##########################')
         return cls._parse_input(user_inp_raw)
-
-
-
 
     @classmethod
     def _parse_input(cls, usr_inp):
@@ -108,7 +102,87 @@ class UserInputModule(object):
         full_inp_dict['tuning_param'] = usr_inp['tuning_param']
         return full_inp_dict
 
+    @classmethod
+    def run_for_mgnify(cls, user_inp_raw: typing.Dict) -> typing.Dict:
+        logger.info('##########################')
+        logger.info('# MGNIFY USER INPUT #')
+        logger.info('##########################')
+        full_inp_dict = {}
+        full_inp_dict['organisms'] = {}
 
+        for key, val in user_inp_raw['organisms'].items():
+            try:
+                org_name, org_dict = cls._parse_single_input(val)
+            except:
+                raise ValueError(f'Error in input genome: {key}, re-check your input')
+            full_inp_dict['organisms'][org_name] = org_dict
+
+        # add non org specific keys to dict
+        orf_fasta_fid = user_inp_raw['sequence']
+        if orf_fasta_fid is not None:
+            orf_seq = str(SeqIO.read(orf_fasta_fid, 'fasta').seq)
+
+        selected_prom = {}
+        logger.info(
+            f'External promoter options were not supplied. endogenous promoters will be used for optimization.'
+            f'promoters from the 1/3 most highly expressed genes of all organisms are used- ')
+
+        for org, org_dict in full_inp_dict['organisms'].items():
+            if org_dict['optimized']:
+                org_third_he_prom_dict = org_dict['third_most_HE']
+                for prom_name, prom_Seq in org_third_he_prom_dict.items():
+                    selected_prom[prom_name + ' from organism: ' + org] = prom_Seq
+                logger.info(f'{len(org_third_he_prom_dict)} promoters are selected from {org}')
+        logger.info(f'Resulting in a total of {len(selected_prom)} used for promoter selection and optimization')
+
+        full_inp_dict['selected_prom'] = selected_prom
+        full_inp_dict['sequence'] = orf_seq
+        full_inp_dict['tuning_param'] = user_inp_raw['tuning_param']
+        return full_inp_dict
+
+
+    @staticmethod
+    def _parse_single_input_mgnify(val):
+        gb_path = val['genome_path']
+        gb_file = SeqIO.read(gb_path, format='gb')
+
+
+        # TODO - continue from here....  convert logic to reading from .gff file format (use code from mgnify_job.py)
+
+        # prom200_dict, cds_dict, intergenic_dict, estimated_expression = extract_gene_data(gb_path, None)
+        # logger.info(f'Number of genes: {len(cds_dict)}, number of intregenic regions: {len(intergenic_dict)}')
+        # gene_names = list(cds_dict.keys())
+        # cai_weights = calculate_cai_weights_for_input(cds_dict, estimated_expression, None)
+        # cai_scores = general_geomean(sequence_lst=cds_dict.values(), weights=cai_weights)
+        # cai_scores_dict = {gene_names[i]: cai_scores[i] for i in range(len(gene_names))}
+        #
+        # tai_weights = None
+        # tai_mean = None
+        # std_tai = None
+        # tai_scores_dict = {}
+        #
+        # if len(estimated_expression):
+        #     highly_exp_promoters = \
+        #         extract_highly_expressed_promoters(estimated_expression, prom200_dict, percent_used=1 / 3)
+        # else:
+        #     highly_exp_promoters = extract_highly_expressed_promoters(cai_scores_dict, prom200_dict, percent_used=1 / 3)
+        #
+        # org_dict = {
+        #     '200bp_promoters': prom200_dict,
+        #     'third_most_HE': highly_exp_promoters,
+        #     'intergenic': intergenic_dict,
+        #     'cai_profile': cai_weights,  # {dna_codon:cai_score}
+        #     'tai_profile': tai_weights,  # {dna_codon:tai_score}, if not found in tgcnDB it will be an empty dict.
+        #     'cai_scores': cai_scores_dict,  # {'gene_name': score}
+        #     'tai_scores': tai_scores_dict,  # {'gene_name': score}, if not found in tgcnDB it will be an empty dict.
+        #     'optimized': val['optimized'],
+        #     'cai_avg': mean(cai_scores),
+        #     'tai_avg': tai_mean,
+        #     'cai_std': stdev(cai_scores),
+        #     'tai_std': std_tai
+        # }
+        #
+        # return org_name, org_dict
 
 
     @staticmethod

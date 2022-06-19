@@ -24,8 +24,8 @@ class promoterModule(object):
         logger.info('##########################')
 
         # FIXME - extracting motifs
-        # promoter_file_path = create_files_for_meme(full_input_dict)
-        # run_streme()
+        promoter_file_path = create_files_for_meme(full_input_dict)
+        run_streme()
 
         # FIXME - only for analysis (mast runs)
         # # Calculate mast for intergenic motifs

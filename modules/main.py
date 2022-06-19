@@ -627,7 +627,7 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
         with open("parsed_input.json", "r") as user_input_file:
              input_dict = json.load(user_input_file)
 
-        should_iterate_all = True
+        should_iterate_all = False
         plots_directory = os.path.join(artifacts_directory, "promoters", "plots")
         if os.path.exists(plots_directory):
             shutil.rmtree(plots_directory)
@@ -677,51 +677,57 @@ def run_modules(user_input_dict: typing.Optional[typing.Dict[str, typing.Any]] =
                                       directory_name=directory_name)
 
         else:
-            organisms_names = list(input_dict["organisms"].keys())
-            organisms_count = len(organisms_names)
-            wanted_count = 1
-            unwanted_count = 1
+            analysis_count = 7
+            all_organisms = input_dict["organisms"]
+            for i in range(25):
+                logger.info(F"Starting iteration #{i}")
+                organisms_names = list(all_organisms.keys())
+                organisms_count = len(organisms_names)
+                wanted_count = analysis_count
+                unwanted_count = analysis_count
 
-            random_suffix = ''.join(random.choice(string.ascii_letters) for _ in range(5))
-            directory_name = F"Wanted_{wanted_count}_unwanted_{unwanted_count}_{random_suffix}"
+                random_suffix = ''.join(random.choice(string.ascii_letters) for _ in range(5))
+                directory_name = F"Wanted_{wanted_count}_unwanted_{unwanted_count}_{random_suffix}"
 
-            selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
-            selected_orgs = {}
-            for i, selected_index in enumerate(selected_orgs_indices):
-                org = organisms_names[selected_index]
-                selected_orgs[org] = input_dict["organisms"][org]
-                if i >= wanted_count:
-                    selected_orgs[org]["optimized"] = False
+                selected_orgs_indices = random.sample(range(organisms_count), wanted_count + unwanted_count)
+                selected_orgs = {}
+                for i, selected_index in enumerate(selected_orgs_indices):
+                    org = organisms_names[selected_index]
+                    selected_orgs[org] = all_organisms[org]
+                    if i >= wanted_count:
+                        selected_orgs[org]["optimized"] = False
+                    else:
+                        selected_orgs[org]["optimized"] = True
 
-            input_dict["organisms"] = selected_orgs
-            try:
-                motif_file_path, inter_files_thresholds, anti_motif_thresholds = promoters.promoterModule.run_module(input_dict)
-                _log_experimental_p_values(inter_files_thresholds, anti_motif_thresholds, directory_name)
-            except promoters_exceptions.MissingMotifFiles:
-                print(F"Missing motif files for one of the files in F{selected_orgs.keys()}")
-                print("Exiting")
-                exit(0)
+                input_dict["organisms"] = selected_orgs
+                try:
+                    motif_file_path, inter_files_thresholds, anti_motif_thresholds = promoters.promoterModule.run_module(input_dict)
+                    _log_experimental_p_values(inter_files_thresholds, anti_motif_thresholds, directory_name)
+                except promoters_exceptions.MissingMotifFiles:
+                    print(F"Missing motif files for one of the files in F{selected_orgs.keys()}")
+                    print("Exiting")
+                    exit(0)
 
-            wanted_e_values = {}
-            wanted_cai_scores = {}
-            unwanted_e_values = {}
-            unwanted_cai_scores = {}
-            for organism_name in input_dict["organisms"].keys():
-                cai_scores, evalues = create_csv_for_organism(organism_name, input_dict)
-                is_optimized = input_dict["organisms"][organism_name]["optimized"]
-                if is_optimized:
-                    wanted_e_values[organism_name] = evalues
-                    wanted_cai_scores[organism_name] = cai_scores
-                else:
-                    unwanted_e_values[organism_name] = evalues
-                    unwanted_cai_scores[organism_name] = cai_scores
+                wanted_e_values = {}
+                wanted_cai_scores = {}
+                unwanted_e_values = {}
+                unwanted_cai_scores = {}
+                for organism_name in input_dict["organisms"].keys():
+                    cai_scores, evalues = create_csv_for_organism(organism_name, input_dict, directory_name=directory_name)
+                    is_optimized = input_dict["organisms"][organism_name]["optimized"]
+                    if is_optimized:
+                        wanted_e_values[organism_name] = evalues
+                        wanted_cai_scores[organism_name] = cai_scores
+                    else:
+                        unwanted_e_values[organism_name] = evalues
+                        unwanted_cai_scores[organism_name] = cai_scores
 
-            analyze_new_model(wanted_e_values,
-                              wanted_cai_scores,
-                              unwanted_e_values,
-                              unwanted_cai_scores,
-                              motif_file_path,
-                              directory_name=directory_name)
+                analyze_new_model(wanted_e_values,
+                                  wanted_cai_scores,
+                                  unwanted_e_values,
+                                  unwanted_cai_scores,
+                                  motif_file_path,
+                                  directory_name=directory_name)
 
         logger.info("The end")
         exit(0)
@@ -828,7 +834,35 @@ def unit1(input_dict, model_preferences: models.ModelPreferences):
     return final_cds, optimization_index, weakest_score
 
 
+def create_unified_csv():
+    base_directory = r"C:\Users\Kama\Documents\Moran\biomedical-engineering\microbiome-optimization\articles\Journal\5_5_wanted_vs_unwanted_33_100"
+    results_csv_files = list(Path(base_directory).glob(os.path.join("**", "e_value_stats.csv")))
+    if len(results_csv_files) != 10:
+        print(F"found {len(results_csv_files)} files.")
+        return
+    import collections
+    results_dict = collections.defaultdict(list)
+    for csv_file_path in results_csv_files:
+        with open(csv_file_path, "r") as csv_file:
+            reader = csv.reader(csv_file)
+            for row in reader:
+                if row[0] == "parameter_name":
+                    continue
+                results_dict[row[0]].append(float(row[1]))
+
+    results_dict = {key: np.mean(value) for key, value in results_dict.items()}
+    with open(os.path.join(base_directory, "final_results.csv"), "w") as final_results_file:
+        writer = csv.writer(final_results_file)
+        for key, value in results_dict.items():
+            writer.writerow([key, value])
+
+    print("success")
+
+
 if __name__ == "__main__":
+    create_unified_csv()
+    exit(0)
+
     tic = time.time()
     run_modules()
     toc = time.time()

@@ -5,6 +5,8 @@ from modules.ORF.calculating_cai import general_geomean
 from modules.logger_factory import LoggerFactory
 import os
 from statistics import mean, stdev
+from pathlib import Path
+from BCBio import GFF
 # initialize the logger object
 logger = LoggerFactory.create_logger("user_input")
 
@@ -112,7 +114,7 @@ class UserInputModule(object):
 
         for key, val in user_inp_raw['organisms'].items():
             try:
-                org_name, org_dict = cls._parse_single_input(val)
+                org_name, org_dict = cls._parse_single_input_mgnify(val)
             except:
                 raise ValueError(f'Error in input genome: {key}, re-check your input')
             full_inp_dict['organisms'][org_name] = org_dict
@@ -142,25 +144,86 @@ class UserInputModule(object):
 
 
     @staticmethod
-    def _parse_single_input_mgnify(val):
-        gb_path = val['genome_path']
-        gb_file = SeqIO.read(gb_path, format='gb')
+    def _parse_single_input_mgnify(genome):
+        gff_files = Path(genome).glob("*.gff")
+        if len(gff_files) != 1:
+            print(F"Found {len(gff_files)} .gff files for {genome}. Abort!")
+            exit(1)
 
+        gff_file_path = gff_files[0]
+        # for gff_file_path in gff_files:
+        fasta_files = list(Path(genome).glob(F"{Path(genome).name}.fna"))
+        if len(fasta_files) != 1:
+            print(F"Wrong number of .fna files for {genome}..")
+            exit(1)
 
-        # TODO - continue from here....  convert logic to reading from .gff file format (use code from mgnify_job.py)
+        fasta_file = fasta_files[0]
 
-        # prom200_dict, cds_dict, intergenic_dict, estimated_expression = extract_gene_data(gb_path, None)
-        # logger.info(f'Number of genes: {len(cds_dict)}, number of intregenic regions: {len(intergenic_dict)}')
-        # gene_names = list(cds_dict.keys())
-        # cai_weights = calculate_cai_weights_for_input(cds_dict, estimated_expression, None)
-        # cai_scores = general_geomean(sequence_lst=cds_dict.values(), weights=cai_weights)
-        # cai_scores_dict = {gene_names[i]: cai_scores[i] for i in range(len(gene_names))}
-        #
-        # tai_weights = None
-        # tai_mean = None
-        # std_tai = None
-        # tai_scores_dict = {}
-        #
+        with open(fasta_file) as file:
+            fasta_dict = {record.description: str(record.seq) for record in SeqIO.parse(file, "fasta")}
+        fasta_keys = [x.split("-") for x in fasta_dict.keys()]
+
+        gff_file = GFF.parse(gff_file_path)
+        final_prom_dict = {}
+        final_intergenic_dict = {}
+        final_cds_dict = {}
+        for record in gff_file:
+            cds_seqs = []
+            gene_names = []
+            functions = []
+            starts = []
+            ends = []
+            strands = []
+            genome = None
+            for x in fasta_keys:
+                if record.id in x:
+                    genome = fasta_dict.get("-".join(x))
+                    break
+            if genome is None:
+                print(
+                    F"Failed to find a matching genome sequence for: {record.id} in {file_path}. Skipping all record"
+                    F" features.")
+                continue
+            for feature in record.features:
+                if feature.type == "CDS":
+                    if "gene" in feature.qualifiers.keys():
+                        name = feature.qualifiers['gene'][0]
+                    elif "locus_tag" in feature.qualifiers.keys():
+                        name = feature.qualifiers["locus_tag"][0]
+                    else:
+                        continue
+                    if feature.location is not None \
+                            and name not in gene_names:
+                        try:
+                            cds = feature.extract(genome)
+                        except:
+                            print(F"Could not decode cds for feature {name} in {file_path}. Skipping.")
+                            continue
+                        function = " ".join(feature.qualifiers["product"])
+
+                        if len(cds) % 3 != 0:
+                            continue
+                        gene_names.append(name)
+                        cds_seqs.append(cds)
+                        functions.append(function)
+                        starts.append(feature.location.start)
+                        ends.append(feature.location.end)
+                        strands.append(feature.location.strand)
+            entry_num = len(gene_names)
+            name_and_function = [gene_names[i] + '|' + functions[i] for i in range(entry_num)]
+            cds_dict = {name_and_function[i]: cds_seqs[i] for i in range(entry_num)}
+            final_cds_dict.update(cds_dict)
+            prom200_dict = extract_prom(starts, ends, strands, name_and_function, prom_length=200, genome=genome)
+            final_prom_dict.update(prom200_dict)
+            intergenic_dict = extract_intergenic(starts, ends, strands, prom_length=200, genome=genome, len_th=30)
+            final_intergenic_dict.update(intergenic_dict)
+
+        # TODO - continue from here....  calculate estimated expression based on the old code
+        gene_names = list(final_cds_dict.keys())
+        cai_weights = calculate_cai_weights_for_input(final_cds_dict, estimasted_expression, None)
+        cai_scores = general_geomean(sequence_lst=final_cds_dict.values(), weights=cai_weights)
+        cai_scores_dict = {gene_names[i]: cai_scores[i] for i in range(len(gene_names))}
+
         # if len(estimated_expression):
         #     highly_exp_promoters = \
         #         extract_highly_expressed_promoters(estimated_expression, prom200_dict, percent_used=1 / 3)

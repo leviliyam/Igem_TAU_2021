@@ -863,7 +863,7 @@ def create_unified_csv():
     print("success")
 
 
-def generate_mgnify_user_input(catalogue_name: str, n_organisms: int, percent_optimized: float = 0.5):
+def generate_mgnify_user_input(mgnify_base_path: str, catalogue_name: str, n_organisms: int, percent_optimized: float = 0.5):
     inp_dict = {
         'sequence': os.path.join(base_path, 'mCherry_original.fasta'),
         'tuning_param': 0.5,
@@ -902,8 +902,10 @@ if __name__ == "__main__":
     # exit(0)
     mgnify = True
     mgnify_user_input = None
+    base_mgnify_dir = r"C:\Users\Kama\Documents\Moran\biomedical-engineering\microbiome-optimization\mgnify_files"
     if mgnify:
-        mgnify_user_input = generate_mgnify_user_input(catalogue_name="human-oral-v1-0",
+        mgnify_user_input = generate_mgnify_user_input(mgnify_base_path=base_mgnify_dir,
+                                                       catalogue_name="human-oral-v1-0",
                                                        n_organisms=2)
 
     tic = time.time()

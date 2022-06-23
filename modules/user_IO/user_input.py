@@ -144,8 +144,9 @@ class UserInputModule(object):
 
 
     @staticmethod
-    def _parse_single_input_mgnify(genome):
-        gff_files = Path(genome).glob("*.gff")
+    def _parse_single_input_mgnify(val):
+        genome = val['genome_path']
+        gff_files = list(Path(genome).glob("*.gff"))
         if len(gff_files) != 1:
             print(F"Found {len(gff_files)} .gff files for {genome}. Abort!")
             exit(1)
@@ -218,34 +219,29 @@ class UserInputModule(object):
             intergenic_dict = extract_intergenic(starts, ends, strands, prom_length=200, genome=genome, len_th=30)
             final_intergenic_dict.update(intergenic_dict)
 
-        # TODO - continue from here....  calculate estimated expression based on the old code
         gene_names = list(final_cds_dict.keys())
-        cai_weights = calculate_cai_weights_for_input(final_cds_dict, estimasted_expression, None)
+        cai_weights = calculate_cai_weights_for_input(final_cds_dict, {}, None)
         cai_scores = general_geomean(sequence_lst=final_cds_dict.values(), weights=cai_weights)
         cai_scores_dict = {gene_names[i]: cai_scores[i] for i in range(len(gene_names))}
 
-        # if len(estimated_expression):
-        #     highly_exp_promoters = \
-        #         extract_highly_expressed_promoters(estimated_expression, prom200_dict, percent_used=1 / 3)
-        # else:
-        #     highly_exp_promoters = extract_highly_expressed_promoters(cai_scores_dict, prom200_dict, percent_used=1 / 3)
-        #
-        # org_dict = {
-        #     '200bp_promoters': prom200_dict,
-        #     'third_most_HE': highly_exp_promoters,
-        #     'intergenic': intergenic_dict,
-        #     'cai_profile': cai_weights,  # {dna_codon:cai_score}
-        #     'tai_profile': tai_weights,  # {dna_codon:tai_score}, if not found in tgcnDB it will be an empty dict.
-        #     'cai_scores': cai_scores_dict,  # {'gene_name': score}
-        #     'tai_scores': tai_scores_dict,  # {'gene_name': score}, if not found in tgcnDB it will be an empty dict.
-        #     'optimized': val['optimized'],
-        #     'cai_avg': mean(cai_scores),
-        #     'tai_avg': tai_mean,
-        #     'cai_std': stdev(cai_scores),
-        #     'tai_std': std_tai
-        # }
-        #
-        # return org_name, org_dict
+        highly_exp_promoters = extract_highly_expressed_promoters(cai_scores_dict, final_prom_dict, percent_used=1/3)
+
+        org_dict = {
+            '200bp_promoters': final_prom_dict,
+            'third_most_HE': highly_exp_promoters,
+            'intergenic': final_intergenic_dict,
+            'cai_profile': cai_weights,  # {dna_codon:cai_score}
+            'tai_profile': None,  # {dna_codon:tai_score}, if not found in tgcnDB it will be an empty dict.
+            'cai_scores': cai_scores_dict,  # {'gene_name': score}
+            'tai_scores': {},  # {'gene_name': score}, if not found in tgcnDB it will be an empty dict.
+            'optimized': val['optimized'],
+            'cai_avg': mean(cai_scores),
+            'tai_avg': None,
+            'cai_std': stdev(cai_scores),
+            'tai_std': None
+        }
+
+        return genome, org_dict
 
 
     @staticmethod
